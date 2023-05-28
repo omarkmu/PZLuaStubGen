@@ -1,0 +1,15 @@
+{
+  "include": ["src/*.ts", "src/parser/types.ts"],
+  "compilerOptions": {
+    "target": "es2017",
+    "module": "esnext",
+    "esModuleInterop": true,
+    "moduleResolution": "nodenext",
+    "forceConsistentCasingInFileNames": true,
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "useUnknownInCatchVariables": true,
+    "skipLibCheck": true
+  }
+}
