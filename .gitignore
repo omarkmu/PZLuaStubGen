@@ -1,4 +1,13 @@
+# VSCode
 .vscode/
+
+# NodeJS
 node_modules/
-out/
+
+# Compiled JS code.
 pz-doc.js
+
+# Local testing
+assets/
+dist/
+out/
