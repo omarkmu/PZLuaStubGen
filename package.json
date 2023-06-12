@@ -1,6 +1,7 @@
 {
   "scripts": {
-    "build": "npx rollup --config"
+    "build": "npx rollup --config",
+    "start": "node pz-doc.js annotate -in 'assets/lua/' -out 'dist/lua/' -verbose true"
   },
   "dependencies": {
     "luaparse": "^0.3.1",
