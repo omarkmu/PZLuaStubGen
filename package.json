@@ -1,7 +1,8 @@
 {
   "scripts": {
     "build": "npx rollup --config",
-    "start": "node pz-doc.js annotate -in 'assets/lua/' -out 'dist/lua/' -verbose true"
+    "start": "node pz-doc.js annotate -i assets/lua -o dist/lua -v true",
+    "dev": "nodemon -e ts --exec \"npm run build & npm run start\""
   },
   "dependencies": {
     "luaparse": "^0.3.1",
@@ -16,6 +17,7 @@
     "@types/yargs": "^17.0.24",
     "rollup": "^3.22.0",
     "tslib": "^2.5.2",
-    "typescript": "^5.0.4"
+    "typescript": "^5.0.4",
+    "nodemon": "2.0.22"
   }
 }
