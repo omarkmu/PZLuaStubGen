@@ -61,7 +61,7 @@ const annotateFiles = async (options: AnnotateArgs) => {
                 continue
             }
 
-            const annotated = annotate(parsed.result, path.basename(fullPath, '.lua'), options)
+            const annotated = annotate(rosetta, parsed.result, path.basename(fullPath, '.lua'), options)
             const outputPath = path.join(outDir, path.relative(inDir, fullPath))
             try {
                 await fs.promises.mkdir(path.dirname(outputPath), { recursive: true })
