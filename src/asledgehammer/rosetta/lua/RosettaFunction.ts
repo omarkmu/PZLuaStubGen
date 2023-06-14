@@ -1,25 +1,30 @@
-import { RosettaEntity } from './RosettaEntity';
-import { RosettaParameter } from './RosettaParameter';
-import { RosettaReturns } from './RosettaReturns';
-import { formatName } from './RosettaUtils';
+import * as Assert from '../../Assert';
 
-export class RosettaMethod extends RosettaEntity {
+import { formatName } from '../RosettaUtils';
+import { RosettaEntity } from '../RosettaEntity';
+import { RosettaParameter } from '../RosettaParameter';
+import { RosettaReturns } from '../RosettaReturns';
+
+export class RosettaFunction extends RosettaEntity {
     readonly parameters: RosettaParameter[] = [];
-    readonly returns: RosettaReturns;
+    returns: RosettaReturns | undefined;
 
     readonly name: string;
-    readonly notes: string | undefined;
-    readonly deprecated: boolean;
-    readonly modifiers: string[];
+    notes: string | undefined;
+    deprecated: boolean | undefined;
 
-    constructor(raw: { [key: string]: any }) {
+    constructor(name: string, raw: { [key: string]: any }) {
         super(raw);
 
-        /* PROPERTIES */
-        this.name = formatName(this.readRequiredString('name'));
-        this.notes = this.readNotes();
+        Assert.assertNonEmptyString(name, 'name');
+        this.name = formatName(name);
         this.deprecated = this.readBoolean('deprecated') != null;
-        this.modifiers = this.readModifiers();
+        this.parse(raw);
+    }
+
+    parse(raw: { [key: string]: any }) {
+        /* PROPERTIES */
+        this.notes = this.readNotes(raw);
 
         /* PARAMETERS */
         if (raw['parameters'] !== undefined) {

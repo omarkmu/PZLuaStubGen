@@ -8,42 +8,39 @@ export class RosettaEntity {
         this.raw = raw;
     }
 
-    readModifiers(): string[] {
-        const { raw } = this;
+    readModifiers(raw = this.raw): string[] {
         if (!raw['modifiers']) return [];
         return [...raw['modifiers']];
     }
 
-    readString(id: string): string | undefined {
-        const { raw } = this;
+    readString(id: string, raw = this.raw): string | undefined {
         let value = raw[id];
         if (value != null) return `${value}`;
     }
 
-    readNotes(): string | undefined {
-        const notes = this.readString('notes');
+    readNotes(raw = this.raw): string | undefined {
+        const notes = this.readString('notes', raw);
         if (notes != null) {
             return notes.replace(/\s/g, ' ').replace(/\s\s/g, ' ').trim();
         }
     }
 
-    readRequiredString(id: string): string {
-        const { raw } = this;
+    readRequiredString(id: string, raw = this.raw): string {
         if (raw[id] === undefined) {
             throw new Error(`The string with the id '${id}' doesn't exist.`);
         }
         return `${raw[id]}`;
     }
 
-    readBoolean(id: string): boolean | undefined {
-        const value = this.raw[id];
-        if(value != null) return !!value;
+    readBoolean(id: string, raw = this.raw): boolean | undefined {
+        const value = raw[id];
+        if (value != null) return !!value;
     }
 
-    readRequiredBoolean(id: string): boolean {
-        if(this.raw[id] === undefined) {
+    readRequiredBoolean(id: string, raw = this.raw): boolean {
+        if (raw[id] === undefined) {
             throw new Error(`The boolean with the id '${id}' doesn't exist.`);
         }
-        return !!this.raw[id];
+        return !!raw[id];
     }
 }

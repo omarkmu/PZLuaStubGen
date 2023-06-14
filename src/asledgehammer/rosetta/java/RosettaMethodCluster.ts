@@ -1,4 +1,5 @@
-import * as Assert from '../Assert';
+import * as Assert from '../../Assert';
+
 import { RosettaMethod } from './RosettaMethod';
 
 export class RosettaMethodCluster {
@@ -11,7 +12,12 @@ export class RosettaMethodCluster {
     }
 
     add(method: RosettaMethod) {
-        if (this.methods.indexOf(method) !== -1) return;
+        let indexOf = this.methods.indexOf(method);
+        if (indexOf !== -1) {
+            console.log(`Overriding method: ${method.name} ..`);
+            this.methods[indexOf].parse(method.raw);
+            return;
+        }
         this.methods.push(method);
     }
 

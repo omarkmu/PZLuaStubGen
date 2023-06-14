@@ -1,13 +1,14 @@
-import * as Assert from '../Assert';
-import { RosettaEntity } from './RosettaEntity';
-import { RosettaType } from './RosettaType';
+import * as Assert from '../../Assert';
+import { RosettaEntity } from '../RosettaEntity';
+import { RosettaType } from '../RosettaType';
 
 export class RosettaField extends RosettaEntity {
     readonly name: string;
     readonly modifiers: string[];
     readonly type: RosettaType;
-    readonly notes: string | undefined;
     readonly deprecated: boolean | undefined;
+    
+    notes: string | undefined;
 
     constructor(name: string, raw: { [key: string]: any }) {
         super(raw);
@@ -18,7 +19,11 @@ export class RosettaField extends RosettaEntity {
         this.name = name;
         this.modifiers = this.readModifiers();
         this.type = new RosettaType(raw['type']);
-        this.notes = this.readNotes();
-        this.deprecated = this.readBoolean("deprecated") != null;
+        this.deprecated = this.readBoolean('deprecated') != null;
+        this.notes = this.readNotes(raw);
+    }
+
+    parse(raw: { [key: string]: any }) {
+        this.notes = this.readNotes(raw);
     }
 }
