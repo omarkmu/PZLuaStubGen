@@ -20,7 +20,7 @@ export class RosettaField extends RosettaEntity {
         this.modifiers = this.readModifiers();
         this.type = new RosettaType(raw['type']);
         this.deprecated = this.readBoolean('deprecated') != null;
-        this.notes = this.readNotes(raw);
+        this.notes = this.readNotes();
     }
 
     parse(raw: { [key: string]: any }) {

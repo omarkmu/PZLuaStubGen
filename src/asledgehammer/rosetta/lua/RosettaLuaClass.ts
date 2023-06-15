@@ -3,7 +3,7 @@ import * as Assert from '../../Assert';
 import { formatName } from '../RosettaUtils';
 import { RosettaEntity } from '../RosettaEntity';
 import { RosettaFunction } from './RosettaFunction';
-import { RosettaField } from '../java/RosettaField';
+import { RosettaLuaField } from './RosettaLuaField';
 
 export class RosettaLuaClass extends RosettaEntity {
     readonly __extends: string | undefined;
@@ -11,7 +11,7 @@ export class RosettaLuaClass extends RosettaEntity {
 
     readonly functions: { [name: string]: RosettaFunction } = {};
     readonly methods: { [name: string]: RosettaFunction } = {};
-    readonly fields: { [name: string]: RosettaField } = {};
+    readonly fields: { [name: string]: RosettaLuaField } = {};
 
     deprecated: boolean = false;
 
@@ -53,7 +53,7 @@ export class RosettaLuaClass extends RosettaEntity {
             const rawFields: { [key: string]: any } = raw['fields'];
             for (const name of Object.keys(rawFields)) {
                 const rawField = rawFields[name];
-                const field = new RosettaField(name, rawField);
+                const field = new RosettaLuaField(name, rawField);
                 this.fields[name] = this.fields[field.name] = field;
             }
         }
@@ -102,7 +102,7 @@ export class RosettaLuaClass extends RosettaEntity {
                 const rawField = rawFields[name];
                 let field = this.fields[name];
                 if (field == null) {
-                    field = new RosettaField(name, rawField);
+                    field = new RosettaLuaField(name, rawField);
                     this.fields[name] = this.fields[field.name] = field;
                 } else {
                     console.log(`Overriding class field: ${this.name}.${name}`);

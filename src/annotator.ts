@@ -242,7 +242,9 @@ const annotateMemberFunction = (
             out.push('\n---');
             for (let index = 0; index < rosettaParamCount; index++) {
                 const param = rosettaObj.parameters[index];
-                let s = `\n--- @param ${param.name} ${param.type.basic} ${param.notes != undefined ? param.notes : ''}`;
+                let s = `\n--- @param ${param.name} ${param.type.trim()} ${
+                    param.notes != undefined ? param.notes : ''
+                }`;
                 out.push(s);
             }
         }
@@ -251,7 +253,7 @@ const annotateMemberFunction = (
 
         if (rosettaObj.returns != undefined) {
             out.push(
-                `\n--- @return ${rosettaObj.returns.type.basic}${
+                `\n--- @return ${rosettaObj.returns.type.trim()}${
                     rosettaObj.returns.notes != undefined ? ` ${rosettaObj.returns.notes}` : ''
                 }`
             );
@@ -277,6 +279,9 @@ const annotateFunctionGroup = (cls: LuaClass, functions: LuaFunction[], isMethod
     out.push('\n');
 
     let cons;
+
+    functions.sort((a, b) => a.name.localeCompare(b.name));
+
     for (const func of functions) {
         if (func.name === 'new') {
             // move constructor to bottom
@@ -340,7 +345,7 @@ const annotateClass = (cls: LuaClass, filename: string, args: AnnotateArgs, out:
             if (rosettaLuaField != undefined) {
                 out.push(
                     `\n--- @field ${field.name} ${
-                        rosettaLuaField.type != undefined ? rosettaLuaField.type.basic.trim() : 'any'
+                        rosettaLuaField.type != undefined ? rosettaLuaField.type.trim() : 'any'
                     } ${
                         rosettaLuaField.notes != undefined && rosettaLuaField.notes.length !== 0
                             ? rosettaLuaField.notes.trim()

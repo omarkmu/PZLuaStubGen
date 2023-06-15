@@ -3,17 +3,17 @@ import * as Assert from '../../Assert';
 import { RosettaEntity } from '../RosettaEntity';
 import { formatName } from '../RosettaUtils';
 
-export class RosettaValue extends RosettaEntity {
+export class RosettaLuaParameter extends RosettaEntity {
     readonly name: string;
     type: string;
     notes: string | undefined;
 
-    constructor(name: string, raw: { [key: string]: any }) {
+    constructor(raw: { [key: string]: any }) {
         super(raw);
 
-        Assert.assertNonEmptyString(name, 'name');
-        this.name = formatName(name);
+        Assert.assertNonNull(raw['type'], 'raw[type]');
 
+        this.name = formatName(this.readRequiredString('name'));
         if(raw['type'] != undefined) {
             let type = this.readString('type');
             if (type == undefined) type = 'any';
@@ -21,12 +21,10 @@ export class RosettaValue extends RosettaEntity {
         } else {
             this.type = 'any';
         }
-        
         this.notes = this.readNotes();
     }
-    
-    parse(raw: {[key:string]: any}) {
-        /* (Properties) */
+
+    parse(raw: { [key: string]: any }) {
         this.notes = this.readNotes(raw);
         if (raw['type'] != undefined) {
             this.type = this.readRequiredString('type', raw);

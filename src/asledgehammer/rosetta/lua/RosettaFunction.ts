@@ -2,12 +2,12 @@ import * as Assert from '../../Assert';
 
 import { formatName } from '../RosettaUtils';
 import { RosettaEntity } from '../RosettaEntity';
-import { RosettaParameter } from '../RosettaParameter';
-import { RosettaReturns } from '../RosettaReturns';
+import { RosettaLuaParameter } from './RosettaLuaParameter';
+import { RosettaLuaReturns } from './RosettaLuaReturns';
 
 export class RosettaFunction extends RosettaEntity {
-    readonly parameters: RosettaParameter[] = [];
-    returns: RosettaReturns | undefined;
+    readonly parameters: RosettaLuaParameter[] = [];
+    returns: RosettaLuaReturns | undefined;
 
     readonly name: string;
     notes: string | undefined;
@@ -19,10 +19,13 @@ export class RosettaFunction extends RosettaEntity {
         Assert.assertNonEmptyString(name, 'name');
         this.name = formatName(name);
         this.deprecated = this.readBoolean('deprecated') != null;
-        this.parse(raw);
+  
+        /* PROPERTIES */
+        this.notes = this.readNotes();
     }
 
     parse(raw: { [key: string]: any }) {
+
         /* PROPERTIES */
         this.notes = this.readNotes(raw);
 
@@ -30,7 +33,7 @@ export class RosettaFunction extends RosettaEntity {
         if (raw['parameters'] !== undefined) {
             const rawParameters: { [key: string]: any }[] = raw['parameters'];
             for (const rawParameter of rawParameters) {
-                const parameter = new RosettaParameter(rawParameter);
+                const parameter = new RosettaLuaParameter(rawParameter);
                 this.parameters.push(parameter);
             }
         }
@@ -39,6 +42,6 @@ export class RosettaFunction extends RosettaEntity {
         if (raw['returns'] === undefined) {
             throw new Error(`Method does not have returns definition: ${this.name}`);
         }
-        this.returns = new RosettaReturns(raw['returns']);
+        this.returns = new RosettaLuaReturns(raw['returns']);
     }
 }
