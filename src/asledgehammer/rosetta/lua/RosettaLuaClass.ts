@@ -4,6 +4,7 @@ import { formatName } from '../RosettaUtils';
 import { RosettaEntity } from '../RosettaEntity';
 import { RosettaFunction } from './RosettaFunction';
 import { RosettaLuaField } from './RosettaLuaField';
+import { RosettaLuaConstructor } from './RosettaLuaConstructor';
 
 export class RosettaLuaClass extends RosettaEntity {
     readonly __extends: string | undefined;
@@ -12,9 +13,8 @@ export class RosettaLuaClass extends RosettaEntity {
     readonly functions: { [name: string]: RosettaFunction } = {};
     readonly methods: { [name: string]: RosettaFunction } = {};
     readonly fields: { [name: string]: RosettaLuaField } = {};
-
+    __constructor: RosettaLuaConstructor | undefined;
     deprecated: boolean = false;
-
     notes: string | undefined;
 
     constructor(name: string, raw: { [key: string]: any }) {
@@ -27,6 +27,13 @@ export class RosettaLuaClass extends RosettaEntity {
 
         this.notes = this.readNotes();
         this.deprecated = this.readBoolean('deprecated') === true;
+
+        /* (Constructor) */
+        if (raw['constructor'] != undefined) {
+            const rawConstructor = raw['constructor'];
+            this.__constructor = new RosettaLuaConstructor(this, rawConstructor);
+        console.log({__constructor: this.__constructor});
+        }
 
         /* (Methods) */
         if (raw['methods'] != undefined) {
@@ -62,6 +69,12 @@ export class RosettaLuaClass extends RosettaEntity {
     parse(raw: { [key: string]: any }) {
         this.notes = this.readNotes(raw);
         this.deprecated = this.readBoolean('deprecated', raw) === true;
+
+        /* (Constructor) */
+        if (raw['constructor'] != undefined) {
+            const rawConstructor = raw['constructor'];
+            this.__constructor = new RosettaLuaConstructor(this, rawConstructor);
+        }
 
         /* (Methods) */
         if (raw['methods'] != undefined) {

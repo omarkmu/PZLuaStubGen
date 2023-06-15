@@ -5,6 +5,7 @@ import { AnnotateArgs } from './types';
 
 import { Rosetta } from './asledgehammer/rosetta/Rosetta';
 import { RosettaFunction } from './asledgehammer/rosetta/lua/RosettaFunction';
+import { RosettaLuaConstructor } from './asledgehammer/rosetta/lua/RosettaLuaConstructor';
 
 const PREAMBLE = '--- @meta\n';
 let rosetta: Rosetta;
@@ -202,14 +203,19 @@ const annotateMemberFunction = (
     isMethod: boolean,
     out: string[]
 ) => {
-    let rosettaObj: RosettaFunction | undefined;
+    let rosettaObj: RosettaFunction | RosettaLuaConstructor | undefined;
     const rosettaLuaClass = rosetta.luaClasses[cls.name];
     if (rosettaLuaClass != undefined) {
-        rosettaObj = isMethod ? rosettaLuaClass.methods[func.name] : rosettaLuaClass.functions[func.name];
+        if (func.name === 'new') {
+            // @ts-ignore
+            rosettaObj = rosettaLuaClass.constructor;
+        } else {
+            rosettaObj = isMethod ? rosettaLuaClass.methods[func.name] : rosettaLuaClass.functions[func.name];
+        }
     }
 
     if (rosettaObj != undefined) {
-        console.log(rosettaObj);
+        
     }
 
     const index = isMethod ? ':' : '.';
@@ -219,11 +225,6 @@ const annotateMemberFunction = (
 
     if (rosettaObj != undefined) {
         let appliedFlags = false;
-
-        if (rosettaObj.deprecated) {
-            out.push('\n--- @deprecated');
-            appliedFlags = true;
-        }
 
         if (appliedFlags) {
             out.push('\n---');
@@ -251,14 +252,11 @@ const annotateMemberFunction = (
 
         out.push(`\n---`);
 
-        if (rosettaObj.returns != undefined) {
-            out.push(
-                `\n--- @return ${rosettaObj.returns.type.trim()}${
-                    rosettaObj.returns.notes != undefined ? ` ${rosettaObj.returns.notes}` : ''
-                }`
-            );
+        const returns = (rosettaObj as any).returns;
+        if (returns != undefined) {
+            out.push(`\n--- @return ${returns.type.trim()}${returns.notes != undefined ? ` ${returns.notes}` : ''}`);
         } else {
-            out.push(`\n--- @return any`);
+            out.push(`\n--- @return ${returnType}`);
         }
 
         if (rosettaObj.parameters != null) {
