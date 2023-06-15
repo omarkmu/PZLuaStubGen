@@ -218,6 +218,17 @@ const annotateMemberFunction = (
     out.push('\n');
 
     if (rosettaObj != undefined) {
+        let appliedFlags = false;
+
+        if (rosettaObj.deprecated) {
+            out.push('\n--- @deprecated');
+            appliedFlags = true;
+        }
+
+        if (appliedFlags) {
+            out.push('\n---');
+        }
+
         const luaParamCount = func.parameters != undefined ? func.parameters.length : 0;
         const rosettaParamCount = rosettaObj.parameters != undefined ? rosettaObj.parameters.length : 0;
 
@@ -238,19 +249,18 @@ const annotateMemberFunction = (
 
         out.push(`\n---`);
 
-        if(rosettaObj.returns != undefined) {
-           out.push(`\n--- @return ${rosettaObj.returns.type.basic}`);
+        if (rosettaObj.returns != undefined) {
+            out.push(`\n--- @return ${rosettaObj.returns.type.basic}`);
         } else {
-           out.push(`\n--- @return any`); 
+            out.push(`\n--- @return any`);
         }
 
-        if(rosettaObj.parameters != null) {
-            out.push(`\nfunction ${name}(${rosettaObj.parameters.map(o=>o.name).join(', ')}) end`);
+        if (rosettaObj.parameters != null) {
+            out.push(`\nfunction ${name}(${rosettaObj.parameters.map((o) => o.name).join(', ')}) end`);
         } else {
             out.push(`\nfunction ${name}(${func.parameters.join(', ')}) end`);
         }
     } else {
-
         // Original rendering.
         out.push(`\n--- @return ${returnType}`);
         out.push(`\nfunction ${name}(${func.parameters.join(', ')}) end`);
@@ -287,6 +297,15 @@ const annotateClass = (cls: LuaClass, filename: string, args: AnnotateArgs, out:
 
     if (!isSimple) {
         if (rosettaLuaClass != undefined) {
+            let appliedFlags = false;
+            if (rosettaLuaClass.deprecated) {
+                out.push('\n--- @deprecated');
+                appliedFlags = true;
+            }
+            if (appliedFlags) {
+                out.push('\n---');
+            }
+            
             out.push(`\n--- ${rosettaLuaClass.notes}`);
         }
         out.push(`\n--- @class ${cls.name}`);

@@ -11,6 +11,8 @@ export class RosettaLuaClass extends RosettaEntity {
     readonly functions: { [name: string]: RosettaFunction } = {};
     readonly methods: { [name: string]: RosettaFunction } = {};
 
+    deprecated: boolean = false;
+
     notes: string | undefined;
 
     constructor(name: string, raw: { [key: string]: any }) {
@@ -22,6 +24,7 @@ export class RosettaLuaClass extends RosettaEntity {
         this.__extends = this.readString('extends');
 
         this.notes = this.readNotes();
+        this.deprecated = this.readBoolean('deprecated') === true;
 
         /* (Methods) */
         if (raw['methods'] != undefined) {
@@ -46,6 +49,7 @@ export class RosettaLuaClass extends RosettaEntity {
 
     parse(raw: { [key: string]: any }) {
         this.notes = this.readNotes(raw);
+        this.deprecated = this.readBoolean('deprecated', raw) === true;
 
         /* (Functions) */
         if (raw['functions'] != undefined) {
