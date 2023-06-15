@@ -250,7 +250,11 @@ const annotateMemberFunction = (
         out.push(`\n---`);
 
         if (rosettaObj.returns != undefined) {
-            out.push(`\n--- @return ${rosettaObj.returns.type.basic}`);
+            out.push(
+                `\n--- @return ${rosettaObj.returns.type.basic}${
+                    rosettaObj.returns.notes != undefined ? ` ${rosettaObj.returns.notes}` : ''
+                }`
+            );
         } else {
             out.push(`\n--- @return any`);
         }
@@ -305,8 +309,10 @@ const annotateClass = (cls: LuaClass, filename: string, args: AnnotateArgs, out:
             if (appliedFlags) {
                 out.push('\n---');
             }
-            
-            out.push(`\n--- ${rosettaLuaClass.notes}`);
+
+            if (rosettaLuaClass.notes != undefined && rosettaLuaClass.notes.length !== 0) {
+                out.push(`\n--- ${rosettaLuaClass.notes}`);
+            }
         }
         out.push(`\n--- @class ${cls.name}`);
     } else {
@@ -320,11 +326,34 @@ const annotateClass = (cls: LuaClass, filename: string, args: AnnotateArgs, out:
         initializer = rewriteExpression(cls.init);
     }
 
+    let keys = Object.keys(cls.fields);
+    keys.sort((a, b) => a.localeCompare(b));
+
     let fieldCount = 0;
-    for (const field of Object.values(cls.fields)) {
+    for (const key of keys) {
+        const field = cls.fields[key];
         if (initializer && field.inInitializer) continue;
         fieldCount++;
-        out.push(`\n--- @field ${field.name} any`);
+
+        if (rosettaLuaClass != undefined) {
+            const rosettaLuaField = rosettaLuaClass.fields[field.name];
+            if (rosettaLuaField != undefined) {
+                out.push(
+                    `\n--- @field ${field.name} ${
+                        rosettaLuaField.type != undefined ? rosettaLuaField.type.basic.trim() : 'any'
+                    } ${
+                        rosettaLuaField.notes != undefined && rosettaLuaField.notes.length !== 0
+                            ? rosettaLuaField.notes.trim()
+                            : ''
+                    }`
+                );
+            } else {
+                out.push(`\n--- @field ${field.name} any`);
+            }
+        } else {
+            /* (Legacy Render) */
+            out.push(`\n--- @field ${field.name} any`);
+        }
     }
 
     if (fieldCount > 0 && !args['strict-fields']) {
