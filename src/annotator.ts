@@ -3,9 +3,7 @@ import { getParameterList } from './parser/utils';
 import { LuaClass, LuaFunction, LuaSourceInfo } from './parser/types';
 import { AnnotateArgs } from './types';
 
-import { Rosetta } from './asledgehammer/rosetta/Rosetta';
-import { RosettaFunction } from './asledgehammer/rosetta/lua/RosettaFunction';
-import { RosettaLuaConstructor } from './asledgehammer/rosetta/lua/RosettaLuaConstructor';
+import { Rosetta, RosettaLuaFunction, RosettaLuaConstructor } from 'pz-rosetta-ts';
 
 const PREAMBLE = '--- @meta\n';
 let rosetta: Rosetta;
@@ -203,19 +201,15 @@ const annotateMemberFunction = (
     isMethod: boolean,
     out: string[]
 ) => {
-    let rosettaObj: RosettaFunction | RosettaLuaConstructor | undefined;
+    let rosettaObj: RosettaLuaFunction | RosettaLuaConstructor | undefined;
     const rosettaLuaClass = rosetta.luaClasses[cls.name];
     if (rosettaLuaClass != undefined) {
         if (func.name === 'new') {
             // @ts-ignore
-            rosettaObj = rosettaLuaClass.constructor;
+            rosettaObj = rosettaLuaClass.conztructor;
         } else {
             rosettaObj = isMethod ? rosettaLuaClass.methods[func.name] : rosettaLuaClass.functions[func.name];
         }
-    }
-
-    if (rosettaObj != undefined) {
-        
     }
 
     const index = isMethod ? ':' : '.';
@@ -223,18 +217,26 @@ const annotateMemberFunction = (
 
     out.push('\n');
 
-    if (rosettaObj != undefined) {
+    if (rosettaObj !== undefined) {
         let appliedFlags = false;
 
         if (appliedFlags) {
             out.push('\n---');
         }
 
-        const luaParamCount = func.parameters != undefined ? func.parameters.length : 0;
-        const rosettaParamCount = rosettaObj.parameters != undefined ? rosettaObj.parameters.length : 0;
+        const luaParamCount = func.parameters !== undefined ? func.parameters.length : 0;
+        const rosettaParamCount = rosettaObj.parameters !== undefined ? rosettaObj.parameters.length : 0;
 
-        if (luaParamCount !== rosettaParamCount) {
-            throw new Error("Rosetta's " + (isMethod ? 'method' : 'function') + " parameter(s) doesn't match.");
+        if (
+            func.parameters !== undefined &&
+            rosettaObj.parameters !== undefined &&
+            luaParamCount !== rosettaParamCount
+        ) {
+            throw new Error(
+                "Rosetta's " +
+                    (isMethod ? 'method' : 'function') +
+                    ` '${name}' parameter(s) doesn't match. (lua: ${luaParamCount}, rosetta: ${rosettaParamCount})`
+            );
         }
         if (rosettaObj.notes != undefined && rosettaObj.notes.length !== 0) {
             out.push('\n--- ' + rosettaObj.notes);

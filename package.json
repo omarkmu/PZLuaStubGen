@@ -6,6 +6,7 @@
   },
   "dependencies": {
     "luaparse": "^0.3.1",
+    "pz-rosetta-ts": "^1.0.1",
     "yargs": "^17.7.2"
   },
   "devDependencies": {
@@ -15,9 +16,9 @@
     "@types/luaparse": "^0.2.9",
     "@types/node": "^20.2.1",
     "@types/yargs": "^17.0.24",
+    "nodemon": "2.0.22",
     "rollup": "^3.22.0",
     "tslib": "^2.5.2",
-    "typescript": "^5.0.4",
-    "nodemon": "2.0.22"
+    "typescript": "^5.0.4"
   }
 }

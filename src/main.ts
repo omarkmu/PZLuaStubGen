@@ -7,14 +7,12 @@ import { AnnotateArgs } from './types'
 import { annotate } from './annotator'
 import { parse } from './parser'
 
-import { Rosetta } from './asledgehammer/rosetta/Rosetta';
-
+import { Rosetta } from 'pz-rosetta-ts/lib/asledgehammer/rosetta/Rosetta'
 
 const annotateFiles = async (options: AnnotateArgs) => {
 
     const rosetta = new Rosetta();
-    console.log(rosetta.luaClasses['ISUIElement']);
-    // console.log(rosetta.namespaces['zombie.Lua'].classes['LuaManager.GlobalObject']);
+    rosetta.load('assets/rosetta');
 
     // TODO: ultimately will be replaced with YAML definition
     const kahlua = fs.readFileSync(path.join(__dirname, 'kahlua.lua'))
