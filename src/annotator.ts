@@ -3,7 +3,10 @@ import { getParameterList } from './parser/utils'
 import { LuaClass, LuaFunction, LuaSourceInfo } from './parser/types'
 import { AnnotateArgs } from './types'
 
+import { Rosetta, RosettaLuaFunction, RosettaLuaConstructor } from 'pz-rosetta-ts'
+
 const PREAMBLE = '---@meta\n'
+let rosetta: Rosetta
 
 const includeAsIs = (expr: ast.Expression): boolean => {
     switch (expr.type) {
@@ -191,10 +194,83 @@ const shouldSkipClassAnnotation = (cls: LuaClass, filename: string): boolean => 
     return true
 }
 
-const annotateMemberFunction = (cls: LuaClass, func: LuaFunction, returnType: string, isMethod: boolean, out: string[]) => {
+const annotateMemberFunction = (
+    cls: LuaClass,
+    func: LuaFunction,
+    returnType: string,
+    isMethod: boolean,
+    out: string[]
+) => {
+    let rosettaObj: RosettaLuaFunction | RosettaLuaConstructor | undefined
+    const rosettaLuaClass = rosetta.luaClasses[cls.name]
+    if (rosettaLuaClass != undefined) {
+        if (func.name === 'new') {
+            // @ts-ignore
+            rosettaObj = rosettaLuaClass.conztructor
+        } else {
+            rosettaObj = isMethod ? rosettaLuaClass.methods[func.name] : rosettaLuaClass.functions[func.name]
+        }
+    }
+
     const index = isMethod ? ':' : '.'
     const name = `${cls.name}${index}${func.name}`
-    out.push(`\n---@return ${returnType}\nfunction ${name}(${func.parameters.join(', ')}) end`)
+
+    out.push('\n')
+
+    if (rosettaObj !== undefined) {
+        let appliedFlags = false
+
+        if (appliedFlags) {
+            out.push('\n---')
+        }
+
+        const luaParamCount = func.parameters !== undefined ? func.parameters.length : 0
+        const rosettaParamCount = rosettaObj.parameters !== undefined ? rosettaObj.parameters.length : 0
+
+        if (
+            func.parameters !== undefined &&
+            rosettaObj.parameters !== undefined &&
+            luaParamCount !== rosettaParamCount
+        ) {
+            throw new Error(
+                'Rosetta\'s ' +
+                    (isMethod ? 'method' : 'function') +
+                    ` '${name}' parameter(s) doesn't match. (lua: ${luaParamCount}, rosetta: ${rosettaParamCount})`
+            )
+        }
+        if (rosettaObj.notes != undefined && rosettaObj.notes.length !== 0) {
+            out.push('\n--- ' + rosettaObj.notes)
+        }
+        if (rosettaParamCount !== 0) {
+            out.push('\n---')
+            for (let index = 0; index < rosettaParamCount; index++) {
+                const param = rosettaObj.parameters[index]
+                let s = `\n---@param ${param.name} ${param.type.trim()} ${
+                    param.notes != undefined ? param.notes : ''
+                }`
+                out.push(s)
+            }
+        }
+
+        out.push(`\n---`)
+
+        const returns = (rosettaObj as any).returns
+        if (returns != undefined) {
+            out.push(`\n---@return ${returns.type.trim()}${returns.notes != undefined ? ` ${returns.notes}` : ''}`)
+        } else {
+            out.push(`\n---@return ${returnType}`)
+        }
+
+        if (rosettaObj.parameters != null) {
+            out.push(`\nfunction ${name}(${rosettaObj.parameters.map((o) => o.name).join(', ')}) end`)
+        } else {
+            out.push(`\nfunction ${name}(${func.parameters.join(', ')}) end`)
+        }
+    } else {
+        // Original rendering.
+        out.push(`\n---@return ${returnType}`)
+        out.push(`\nfunction ${name}(${func.parameters.join(', ')}) end`)
+    }
 }
 
 const annotateFunctionGroup = (cls: LuaClass, functions: LuaFunction[], isMethod: boolean, out: string[]) => {
@@ -203,6 +279,9 @@ const annotateFunctionGroup = (cls: LuaClass, functions: LuaFunction[], isMethod
     out.push('\n')
 
     let cons
+
+    functions.sort((a, b) => a.name.localeCompare(b.name))
+
     for (const func of functions) {
         if (func.name === 'new') {
             // move constructor to bottom
@@ -223,7 +302,23 @@ const annotateFunctionGroup = (cls: LuaClass, functions: LuaFunction[], isMethod
 const annotateClass = (cls: LuaClass, filename: string, args: AnnotateArgs, out: string[]) => {
     const isSimple = shouldSkipClassAnnotation(cls, filename)
 
+    const rosettaLuaClass = rosetta.luaClasses[cls.name]
+
     if (!isSimple) {
+        if (rosettaLuaClass != undefined) {
+            let appliedFlags = false
+            if (rosettaLuaClass.deprecated) {
+                out.push('\n---@deprecated')
+                appliedFlags = true
+            }
+            if (appliedFlags) {
+                out.push('\n---')
+            }
+
+            if (rosettaLuaClass.notes != undefined && rosettaLuaClass.notes.length !== 0) {
+                out.push(`\n--- ${rosettaLuaClass.notes}`)
+            }
+        }
         out.push(`\n---@class ${cls.name}`)
     } else {
         out.push('\n')
@@ -236,11 +331,34 @@ const annotateClass = (cls: LuaClass, filename: string, args: AnnotateArgs, out:
         initializer = rewriteExpression(cls.init)
     }
 
+    let keys = Object.keys(cls.fields)
+    keys.sort((a, b) => a.localeCompare(b))
+
     let fieldCount = 0
-    for (const field of Object.values(cls.fields)) {
+    for (const key of keys) {
+        const field = cls.fields[key]
         if (initializer && field.inInitializer) continue
         fieldCount++
-        out.push(`\n---@field ${field.name} any`)
+
+        if (rosettaLuaClass != undefined) {
+            const rosettaLuaField = rosettaLuaClass.fields[field.name]
+            if (rosettaLuaField != undefined) {
+                out.push(
+                    `\n---@field ${field.name} ${
+                        rosettaLuaField.type != undefined ? rosettaLuaField.type.trim() : 'any'
+                    } ${
+                        rosettaLuaField.notes != undefined && rosettaLuaField.notes.length !== 0
+                            ? rosettaLuaField.notes.trim()
+                            : ''
+                    }`
+                )
+            } else {
+                out.push(`\n---@field ${field.name} any`)
+            }
+        } else {
+            /* (Legacy Render) */
+            out.push(`\n---@field ${field.name} any`)
+        }
     }
 
     if (fieldCount > 0 && !args['strict-fields']) {
@@ -287,8 +405,9 @@ const annotateFunction = (func: LuaFunction, out: string[]) => {
     out.push(`\n---@return any\nfunction ${func.name}(${func.parameters.join(', ')}) end`)
 }
 
-export const annotate = (result: LuaSourceInfo, filename: string, args: AnnotateArgs): string => {
-    const out = [ PREAMBLE ]
+export const annotate = (insRosetta: Rosetta, result: LuaSourceInfo, filename: string, args: AnnotateArgs): string => {
+    rosetta = insRosetta
+    const out = [PREAMBLE]
 
     let writtenLocals: Set<string> = new Set()
     for (const local of Object.values(result.locals)) {
@@ -334,7 +453,7 @@ export const annotate = (result: LuaSourceInfo, filename: string, args: Annotate
     }
 
     if (result.moduleReturns.length > 0) {
-        const returns = result.moduleReturns.map(expr => rewriteExpression(expr))
+        const returns = result.moduleReturns.map((expr) => rewriteExpression(expr))
         if (returns.indexOf(undefined) === -1) {
             out.push('\nreturn ')
             out.push(returns.join(','))
