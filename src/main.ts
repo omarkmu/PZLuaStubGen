@@ -12,7 +12,12 @@ import { Rosetta } from 'pz-rosetta-ts/lib/asledgehammer/rosetta/Rosetta'
 const annotateFiles = async (options: AnnotateArgs) => {
 
     const rosetta = new Rosetta()
-    rosetta.load('assets/rosetta')
+
+    try {
+        rosetta.load('assets/rosetta')
+    } catch (e) {
+        console.log(`Failed to load rosetta; creating fallback annotations. ${e}`)
+    }
 
     // TODO: ultimately will be replaced with YAML definition
     const kahlua = fs.readFileSync(path.join(__dirname, 'kahlua.lua'))
