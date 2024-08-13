@@ -47,6 +47,7 @@ function table.isempty(table) end
 function table.wipe(table) end
 
 ---@overload fun(table: table): table
+---@param ... any
 ---@return table
 function table.newarray(...) end
 
