@@ -14,7 +14,7 @@ const annotateFiles = async (options: AnnotateArgs) => {
     const rosetta = new Rosetta()
 
     try {
-        rosetta.load('assets/rosetta')
+        rosetta.load(options.rosetta)
     } catch (e) {
         console.log(`Failed to load rosetta; creating fallback annotations. ${e}`)
     }
@@ -103,6 +103,7 @@ yargs(hideBin(process.argv))
                 .option('verbose', { type: 'boolean', alias: 'v' })
                 .option('include-kahlua', { type: 'boolean', alias: 'k' })
                 .option('strict-fields', { type: 'boolean' })
+                .option('rosetta', {type : 'string', default: 'assets/rosetta' })
                 .check(args => {
                     const inDir = path.resolve(args.in)
                     if (!fs.existsSync(inDir)) {

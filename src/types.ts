@@ -4,4 +4,5 @@ export interface AnnotateArgs {
     verbose?: boolean
     ['include-kahlua']?: boolean
     ['strict-fields']?: boolean
+    rosetta: string
 }
