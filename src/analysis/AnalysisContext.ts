@@ -1073,15 +1073,17 @@ export class AnalysisContext {
         }
 
         for (const [field, expressions] of info.definitions) {
-            const first = expressions[0]
-            const firstExpr = first?.expression
-            if (
-                expressions.length === 1 &&
-                !first.instance &&
-                firstExpr?.type === 'literal' &&
-                firstExpr.functionId
-            ) {
-                const id = firstExpr.functionId
+            const functionExpr = expressions.find((x) => {
+                return (
+                    (cls.generated || !x.functionLevel) &&
+                    !x.instance &&
+                    x.expression
+                )
+            })?.expression
+
+            let addedFunction = false
+            if (functionExpr?.type === 'literal' && functionExpr.functionId) {
+                const id = functionExpr.functionId
                 const funcInfo = this.getFunctionInfo(id)
                 const identExpr = funcInfo.identifierExpression
 
@@ -1113,11 +1115,10 @@ export class AnalysisContext {
                     target.push(func)
                 } else {
                     const target = indexer === ':' ? methods : functions
-
                     target.push(func)
                 }
 
-                continue
+                addedFunction = true
             }
 
             const name = LuaHelpers.getLuaFieldKey(field)
@@ -1129,9 +1130,22 @@ export class AnalysisContext {
                     this.resolveTypes(expr).forEach((x) => instanceTypes.add(x))
                 }
 
+                const types = this.finalizeTypes(instanceTypes)
+
+                // function collision → add only if there are other types
+                if (addedFunction) {
+                    const checkTypes = new Set(types)
+                    checkTypes.delete('function')
+                    checkTypes.delete('nil')
+
+                    if (checkTypes.size === 0) {
+                        continue
+                    }
+                }
+
                 fields.push({
                     name,
-                    types: this.finalizeTypes(instanceTypes),
+                    types,
                 })
 
                 continue
@@ -1139,7 +1153,7 @@ export class AnalysisContext {
 
             const staticExprs = expressions.filter((x) => !x.instance)
             if (staticExprs.length > 0) {
-                if (literalKeys.has(name)) {
+                if (addedFunction || literalKeys.has(name)) {
                     continue
                 }
 
