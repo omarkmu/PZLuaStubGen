@@ -1552,6 +1552,30 @@ export class AnalysisContext {
                 .filter((x) => x !== undefined),
         )
 
+        const classTypes = new Set<string>()
+        for (const type of finalizedTypes) {
+            switch (type) {
+                case 'nil':
+                case 'boolean':
+                case 'string':
+                case 'number':
+                case 'table':
+                case 'function':
+                    break
+
+                default:
+                    classTypes.add(type)
+            }
+        }
+
+        if (classTypes.size > 2) {
+            // >2 classes → likely narrowing failure
+            // remove and mark as table instead
+
+            classTypes.forEach((x) => finalizedTypes.delete(x))
+            finalizedTypes.add('table')
+        }
+
         return finalizedTypes
     }
 
