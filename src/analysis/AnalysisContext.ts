@@ -497,7 +497,7 @@ export class AnalysisContext {
 
         // check that metatable is a class
         const metaInfo = this.getTableInfo(resolvedMeta)
-        if (!metaInfo.className) {
+        if (!metaInfo.className && !metaInfo.fromHiddenClass) {
             return
         }
 
@@ -886,7 +886,7 @@ export class AnalysisContext {
             // `:new` method without class → create class
             if (tableId.startsWith('@table')) {
                 const tableInfo = this.getTableInfo(tableId)
-                if (!tableInfo.className) {
+                if (!tableInfo.className && !tableInfo.fromHiddenClass) {
                     const baseId = identBase.id
                     const name = scope.localIdToName(baseId) ?? baseId
                     scope.items.push({
@@ -2428,12 +2428,24 @@ export class AnalysisContext {
             return
         }
 
-        // ignore locals
+        const [base, deriveName] = this.checkDeriveCall(rhs) ?? []
+
         if (lhs.id.startsWith('@')) {
+            if (base) {
+                // if there's a derive call, return a table so fields aren't misattributed
+
+                const newId = this.newTableID()
+                const info = this.getTableInfo(newId)
+                info.fromHiddenClass = true
+                info.originalBase = base
+                info.originalDeriveName = deriveName
+
+                return newId
+            }
+
+            // ignore local classes otherwise
             return
         }
-
-        const [base, deriveName] = this.checkDeriveCall(rhs) ?? []
 
         const tableId = !base
             ? this.checkClassTable(rhs, scope)
@@ -2453,8 +2465,8 @@ export class AnalysisContext {
                 classInfo: {
                     name: lhs.id,
                     tableId,
-                    base,
-                    deriveName,
+                    base: base ?? tableInfo.originalBase,
+                    deriveName: deriveName ?? tableInfo.originalDeriveName,
                 },
             })
 

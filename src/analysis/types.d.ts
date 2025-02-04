@@ -287,6 +287,21 @@ export interface TableInfo {
      * The table ID for instances of the class assigned to this table.
      */
     instanceId?: string
+
+    /**
+     * Whether the table was created from a local `:derive` assignment.
+     */
+    fromHiddenClass?: boolean
+
+    /**
+     * The name of the base class, for hidden classes that are ultimately assigned to a global.
+     */
+    originalBase?: string
+
+    /**
+     * The name of the class type, for hidden classes that are ultimately assigned to a global.
+     */
+    originalDeriveName?: string
 }
 
 export {
