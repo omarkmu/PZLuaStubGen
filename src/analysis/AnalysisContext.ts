@@ -301,23 +301,23 @@ export class AnalysisContext {
      */
     handleSetMetatable(
         scope: LuaScope,
-        base: LuaExpression,
+        lhs: LuaExpression,
         meta: LuaExpression,
     ) {
-        if (base.type !== 'reference') {
+        if (lhs.type !== 'reference') {
             return
         }
 
-        const name = scope.localIdToName(base.id)
+        const name = scope.localIdToName(lhs.id)
         if (!name) {
             return
         }
 
         if (meta.type === 'literal') {
-            const fields = meta.fields ?? []
+            const fields = meta.fields
 
             // { X = Y }
-            if (fields.length !== 1) {
+            if (fields?.length !== 1) {
                 return
             }
 
@@ -346,33 +346,44 @@ export class AnalysisContext {
             return
         }
 
-        // get base type
-        const baseTypes = [...this.resolveTypes({ expression: base })]
-        const resolvedBase = baseTypes[0]
-        if (baseTypes.length !== 1 || !resolvedBase.startsWith('@table')) {
+        // get lhs types
+        const lhsTypes = [...this.resolveTypes({ expression: lhs })]
+        if (lhsTypes.length === 0) {
             return
         }
 
-        // copy base fields to class instance fields
-        const baseInfo = this.getTableInfo(resolvedBase)
-        baseInfo.definitions.forEach((list, key) => {
-            let fieldDefs = metaInfo.definitions.get(key)
-            if (!fieldDefs) {
-                fieldDefs = []
-                metaInfo.definitions.set(key, fieldDefs)
+        if (lhsTypes.find((x) => !x.startsWith('@table'))) {
+            // unknown lhs → don't treat as instance
+            return
+        }
+
+        for (const resolvedLhs of lhsTypes) {
+            const lhsInfo = this.getTableInfo(resolvedLhs)
+            // don't copy class fields
+            if (lhsInfo.className) {
+                continue
             }
 
-            for (const info of list) {
-                fieldDefs.push({
-                    expression: info.expression,
-                    index: info.index,
-                    instance: true,
-                    functionLevel: !scope.id.startsWith('@module'),
-                })
-            }
-        })
+            // copy table fields to class instance fields
+            lhsInfo.definitions.forEach((list, key) => {
+                let fieldDefs = metaInfo.definitions.get(key)
+                if (!fieldDefs) {
+                    fieldDefs = []
+                    metaInfo.definitions.set(key, fieldDefs)
+                }
 
-        // mark base as class instance
+                for (const info of list) {
+                    fieldDefs.push({
+                        expression: info.expression,
+                        index: info.index,
+                        instance: true,
+                        functionLevel: !scope.id.startsWith('@module'),
+                    })
+                }
+            })
+        }
+
+        // mark lhs as class instance
         const newId = scope.addInstance(name)
         this.definitions.set(newId, [
             {
