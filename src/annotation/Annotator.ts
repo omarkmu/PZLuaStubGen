@@ -407,12 +407,12 @@ export class Annotator extends BaseReporter {
             )
 
             // fields
-            const instanceFields = new Set<string>()
+            const writtenFields = new Set<string>()
             for (const field of sortedFields) {
                 const rosettaField = rosettaClass?.fields?.[field.name]
 
                 const fieldName = rosettaField?.name ?? field.name
-                instanceFields.add(fieldName)
+                writtenFields.add(fieldName)
 
                 let typeString: string
                 let notes: string
@@ -445,7 +445,14 @@ export class Annotator extends BaseReporter {
                 out.push(`${base}:derive("${cls.deriveName}")`)
             } else if (cls.literalFields.length > 0) {
                 out.push('{')
-                this.writeTableFields(cls.literalFields, out)
+
+                this.writeTableFields(
+                    cls.literalFields,
+                    out,
+                    undefined,
+                    writtenFields,
+                )
+
                 out.push('\n}')
             } else {
                 out.push('{}')
@@ -466,7 +473,7 @@ export class Annotator extends BaseReporter {
                 const rosettaField = rosettaClass?.values?.[field.name]
                 const fieldName = rosettaField?.name ?? field.name
 
-                if (instanceFields.has(fieldName)) {
+                if (writtenFields.has(fieldName)) {
                     continue
                 }
 
@@ -735,9 +742,12 @@ export class Annotator extends BaseReporter {
         fields: TableField[],
         out: string[],
         depth: number = 1,
-    ) {
+        writtenFields?: Set<string>,
+    ): Set<string> {
+        writtenFields ??= new Set()
         const tab = '    '.repeat(depth)
 
+        let nextAutoKey = 1
         for (const field of fields) {
             let skip = false
 
@@ -760,6 +770,11 @@ export class Annotator extends BaseReporter {
 
                 case 'literal':
                     keyString = `[${key.literal}]`
+                    if (key.name) {
+                        skip = writtenFields.has(key.name)
+                        writtenFields.add(key.name)
+                    }
+
                     break
 
                 case 'expression':
@@ -769,12 +784,27 @@ export class Annotator extends BaseReporter {
                         break
                     }
 
-                    keyString = exprString
+                    keyString = `[${exprString}]`
                     break
             }
 
             if (skip) {
                 continue
+            } else if (keyString) {
+                if (writtenFields.has(keyString)) {
+                    continue
+                }
+
+                writtenFields.add(keyString)
+            } else {
+                const autoKey = `[${nextAutoKey}]`
+                nextAutoKey++
+
+                if (writtenFields.has(autoKey)) {
+                    continue
+                }
+
+                writtenFields.add(autoKey)
             }
 
             const valueString = typeString
@@ -814,5 +844,7 @@ export class Annotator extends BaseReporter {
                 out.push(` ---@type ${typeString}`)
             }
         }
+
+        return writtenFields
     }
 }
