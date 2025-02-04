@@ -297,106 +297,6 @@ export class AnalysisContext {
     }
 
     /**
-     * Modifies types based on a setmetatable call.
-     */
-    handleSetMetatable(
-        scope: LuaScope,
-        lhs: LuaExpression,
-        meta: LuaExpression,
-    ) {
-        if (lhs.type !== 'reference') {
-            return
-        }
-
-        const name = scope.localIdToName(lhs.id)
-        if (!name) {
-            return
-        }
-
-        if (meta.type === 'literal') {
-            const fields = meta.fields
-
-            // { X = Y }
-            if (fields?.length !== 1) {
-                return
-            }
-
-            // { __index = X }
-            const field = fields[0]
-            if (field.key.type !== 'string' || field.key.name !== '__index') {
-                return
-            }
-
-            meta = field.value
-        }
-
-        // get metatable type
-        const metaTypes = [...this.resolveTypes({ expression: meta })].filter(
-            (x) => !x.startsWith('@self'),
-        )
-
-        const resolvedMeta = metaTypes[0]
-        if (metaTypes.length !== 1 || !resolvedMeta.startsWith('@table')) {
-            return
-        }
-
-        // check that metatable is a class
-        const metaInfo = this.getTableInfo(resolvedMeta)
-        if (!metaInfo.className) {
-            return
-        }
-
-        // get lhs types
-        const lhsTypes = [...this.resolveTypes({ expression: lhs })]
-        if (lhsTypes.length === 0) {
-            return
-        }
-
-        if (lhsTypes.find((x) => !x.startsWith('@table'))) {
-            // unknown lhs → don't treat as instance
-            return
-        }
-
-        for (const resolvedLhs of lhsTypes) {
-            const lhsInfo = this.getTableInfo(resolvedLhs)
-            // don't copy class fields
-            if (lhsInfo.className) {
-                continue
-            }
-
-            // copy table fields to class instance fields
-            lhsInfo.definitions.forEach((list, key) => {
-                let fieldDefs = metaInfo.definitions.get(key)
-                if (!fieldDefs) {
-                    fieldDefs = []
-                    metaInfo.definitions.set(key, fieldDefs)
-                }
-
-                for (const info of list) {
-                    fieldDefs.push({
-                        expression: info.expression,
-                        index: info.index,
-                        instance: true,
-                        functionLevel: !scope.id.startsWith('@module'),
-                    })
-                }
-            })
-        }
-
-        // mark lhs as class instance
-        const newId = scope.addInstance(name)
-        this.definitions.set(newId, [
-            {
-                expression: {
-                    type: 'literal',
-                    luaType: 'table',
-                    tableId: resolvedMeta,
-                },
-            },
-        ])
-    }
-
-    /**
      * Resolves the types of the analysis items for a module.
      */
     resolveItems(scope: LuaScope): ResolvedScopeItem {
@@ -533,6 +433,102 @@ export class AnalysisContext {
         }
 
         return parameters
+    }
+
+    /**
+     * Modifies types based on a setmetatable call.
+     */
+    setMetatable(scope: LuaScope, lhs: LuaExpression, meta: LuaExpression) {
+        if (lhs.type !== 'reference') {
+            return
+        }
+
+        const name = scope.localIdToName(lhs.id)
+        if (!name) {
+            return
+        }
+
+        if (meta.type === 'literal') {
+            const fields = meta.fields
+
+            // { X = Y }
+            if (fields?.length !== 1) {
+                return
+            }
+
+            // { __index = X }
+            const field = fields[0]
+            if (field.key.type !== 'string' || field.key.name !== '__index') {
+                return
+            }
+
+            meta = field.value
+        }
+
+        // get metatable type
+        const metaTypes = [...this.resolveTypes({ expression: meta })].filter(
+            (x) => !x.startsWith('@self'),
+        )
+
+        const resolvedMeta = metaTypes[0]
+        if (metaTypes.length !== 1 || !resolvedMeta.startsWith('@table')) {
+            return
+        }
+
+        // check that metatable is a class
+        const metaInfo = this.getTableInfo(resolvedMeta)
+        if (!metaInfo.className) {
+            return
+        }
+
+        // get lhs types
+        const lhsTypes = [...this.resolveTypes({ expression: lhs })]
+        if (lhsTypes.length === 0) {
+            return
+        }
+
+        if (lhsTypes.find((x) => !x.startsWith('@table'))) {
+            // unknown lhs → don't treat as instance
+            return
+        }
+
+        for (const resolvedLhs of lhsTypes) {
+            const lhsInfo = this.getTableInfo(resolvedLhs)
+            // don't copy class fields
+            if (lhsInfo.className) {
+                continue
+            }
+
+            // copy table fields to class instance fields
+            lhsInfo.definitions.forEach((list, key) => {
+                let fieldDefs = metaInfo.definitions.get(key)
+                if (!fieldDefs) {
+                    fieldDefs = []
+                    metaInfo.definitions.set(key, fieldDefs)
+                }
+
+                for (const info of list) {
+                    fieldDefs.push({
+                        expression: info.expression,
+                        index: info.index,
+                        instance: true,
+                        functionLevel: !scope.id.startsWith('@module'),
+                    })
+                }
+            })
+        }
+
+        // mark lhs as class instance
+        const newId = scope.addInstance(name)
+        this.definitions.set(newId, [
+            {
+                expression: {
+                    type: 'literal',
+                    luaType: 'table',
+                    tableId: resolvedMeta,
+                },
+            },
+        ])
     }
 
     /**

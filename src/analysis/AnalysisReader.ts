@@ -156,10 +156,10 @@ export class AnalysisReader extends BaseReader {
             return
         }
 
-        const base = this.getLuaExpression(args[0], scope)
+        const lhs = this.getLuaExpression(args[0], scope)
         const meta = this.getLuaExpression(args[1], scope)
 
-        this.context.handleSetMetatable(scope, base, meta)
+        this.context.setMetatable(scope, lhs, meta)
     }
 
     /**
@@ -204,6 +204,10 @@ export class AnalysisReader extends BaseReader {
             rhs: rhsExpression,
             index,
         })
+
+        if (node.type === 'LocalStatement') {
+            this.handleNewAssignment(scope, lhsExpression, rhsExpression)
+        }
     }
 
     /**
@@ -634,6 +638,49 @@ export class AnalysisReader extends BaseReader {
         const created = this.createLuaExpression(node, scope, isNewLocal)
         this.expressionCache.set(node, created)
         return created
+    }
+
+    /**
+     * Handles assignment to `X.new(self, ...)`.
+     */
+    protected handleNewAssignment(
+        scope: LuaScope,
+        lhs: LuaExpression,
+        rhs: LuaExpression,
+    ) {
+        if (lhs.type !== 'reference') {
+            return
+        }
+
+        if (rhs.type !== 'operation') {
+            return
+        }
+
+        // A = X.Y(B, ...)
+        if (rhs.operator !== 'call' || rhs.arguments.length < 2) {
+            return
+        }
+
+        // A = X.Y(B, ...)
+        const callBase = rhs.arguments[0]
+        if (callBase?.type !== 'member' || callBase.indexer !== '.') {
+            return
+        }
+
+        // A = X.new(B, ...)
+        if (callBase.member !== 'new') {
+            return
+        }
+
+        // B is local identifier
+        const firstArg = rhs.arguments[1]
+        if (firstArg?.type !== 'reference' || !firstArg.id.startsWith('@')) {
+            return
+        }
+
+        // treat A = X.new(B) as setmetatable(A, B)
+        // local o = ISPanel.new(self) → setmetatable(o, self)
+        this.context.setMetatable(scope, lhs, firstArg)
     }
 
     /**
