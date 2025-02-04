@@ -350,6 +350,14 @@ export class Annotator extends BaseReporter {
         }
     }
 
+    protected isLiteralTable(expr: LuaExpression): boolean {
+        if (expr.type !== 'literal') {
+            return false
+        }
+
+        return expr.luaType === 'table'
+    }
+
     protected validateRosettaFunction(
         rosettaFunc: RosettaLuaFunction | RosettaLuaConstructor,
         func: AnalyzedFunction,
@@ -462,19 +470,13 @@ export class Annotator extends BaseReporter {
                     continue
                 }
 
+                let typeString: string | undefined
                 if (rosettaField) {
-                    const typeString = rosettaField.type?.trim()
+                    typeString = rosettaField.type?.trim()
+
                     const notes = rosettaField.notes?.trim()
-
-                    if (typeString || notes) {
-                        out.push('\n')
-                    }
-
-                    if (typeString) {
-                        out.push(`\n---@type ${typeString}`)
-                    }
-
                     if (notes) {
+                        out.push('\n')
                         out.push(`\n---${notes}`)
                     }
                 } else if (field.expression) {
@@ -487,8 +489,7 @@ export class Annotator extends BaseReporter {
                         out.push(prefix)
                     }
                 } else {
-                    const typeString = this.getTypeString(field.types)
-                    out.push(`\n---@type ${typeString}`)
+                    typeString = this.getTypeString(field.types)
                 }
 
                 out.push('\n')
@@ -503,6 +504,10 @@ export class Annotator extends BaseReporter {
                     : 'nil'
 
                 out.push(`${fieldName} = ${exprString}`)
+
+                if (typeString) {
+                    out.push(` ---@type ${typeString}`)
+                }
             }
 
             // functions
@@ -626,20 +631,30 @@ export class Annotator extends BaseReporter {
 
     protected writeLocals(mod: AnalyzedModule, out: string[]): boolean {
         for (const local of mod.locals) {
+            let typeString: string | undefined
             const prefix = this.getFunctionPrefixFromExpr(local.expression)
             if (prefix) {
                 out.push('\n')
                 out.push(prefix)
             } else if (local.types) {
-                out.push(`\n---@type ${this.getTypeString(local.types)}`)
+                typeString = this.getTypeString(local.types)
+            }
+
+            // write table type annotations on the line above
+            if (typeString && this.isLiteralTable(local.expression)) {
+                out.push(`\n---@type ${typeString}`)
+                typeString = undefined
             }
 
             const rhs = this.getExpressionString(local.expression)
             if (rhs === 'nil') {
                 out.push(`\nlocal ${local.name}`)
             } else {
-                out.push(`\nlocal ${local.name} = `)
-                out.push(rhs)
+                out.push(`\nlocal ${local.name} = ${rhs}`)
+            }
+
+            if (typeString) {
+                out.push(` ---@type ${typeString}`)
             }
         }
 
@@ -658,9 +673,7 @@ export class Annotator extends BaseReporter {
 
             if (!ret.expression) {
                 const typeString = this.getTypeString(ret.types)
-                locals.push(`\n---@type ${typeString}`)
-                locals.push(`\nlocal __RETURN${i}__`)
-
+                locals.push(`\nlocal __RETURN${i}__ ---@type ${typeString}`)
                 returns.push(`__RETURN${i}__`)
             } else {
                 returns.push(this.getExpressionString(ret.expression))
@@ -764,7 +777,11 @@ export class Annotator extends BaseReporter {
                 continue
             }
 
-            if (typeString) {
+            const valueString = typeString
+                ? 'nil'
+                : this.getExpressionString(field.value, depth + 1)
+
+            if (typeString && this.isLiteralTable(field.value)) {
                 if (out.length > 1) {
                     out.push('\n')
                 }
@@ -772,12 +789,14 @@ export class Annotator extends BaseReporter {
                 out.push('\n')
                 out.push(tab)
                 out.push(`---@type ${typeString}`)
+                typeString = undefined
             } else if (funcString) {
                 if (out.length > 1) {
                     out.push('\n')
                 }
 
                 out.push(funcString)
+                typeString = undefined
             }
 
             out.push('\n')
@@ -788,15 +807,12 @@ export class Annotator extends BaseReporter {
                 out.push(' = ')
             }
 
-            if (typeString) {
-                out.push('nil,')
-                continue
-            }
-
-            const valueString = this.getExpressionString(field.value, depth + 1)
-
             out.push(valueString)
             out.push(',')
+
+            if (typeString) {
+                out.push(` ---@type ${typeString}`)
+            }
         }
     }
 }
