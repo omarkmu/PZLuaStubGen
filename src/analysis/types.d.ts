@@ -201,6 +201,8 @@ export interface LuaExpressionInfo {
     index?: number
 
     instance?: boolean
+
+    functionLevel?: boolean
 }
 
 export interface ResolvedReturnInfo {

@@ -139,7 +139,7 @@ export class AnalysisContext {
                     }
                 }
 
-                this.addDefinition(lhs.id, rhs, index)
+                this.addDefinition(scope, lhs.id, rhs, index)
                 break
 
             case 'index':
@@ -161,7 +161,7 @@ export class AnalysisContext {
                     resolved.luaType,
                 )
 
-                this.addField(indexBase[0], key, rhs, index)
+                this.addField(scope, indexBase[0], key, rhs, index)
                 break
 
             case 'member':
@@ -184,7 +184,14 @@ export class AnalysisContext {
                     }
 
                     const key = this.getLiteralKey(lhs.member)
-                    this.addField(memberBase[0], key, rhs, index, isInstance)
+                    this.addField(
+                        scope,
+                        memberBase[0],
+                        key,
+                        rhs,
+                        index,
+                        isInstance,
+                    )
                 }
 
                 break
@@ -360,6 +367,7 @@ export class AnalysisContext {
                     expression: info.expression,
                     index: info.index,
                     instance: true,
+                    functionLevel: !scope.id.startsWith('@module'),
                 })
             }
         })
@@ -568,6 +576,7 @@ export class AnalysisContext {
     }
 
     protected addDefinition(
+        scope: LuaScope,
         id: string,
         expression: LuaExpression,
         index?: number,
@@ -578,10 +587,15 @@ export class AnalysisContext {
             this.definitions.set(id, defs)
         }
 
-        defs.push({ expression, index })
+        defs.push({
+            expression,
+            index,
+            functionLevel: !scope.id.startsWith('@module'),
+        })
     }
 
     protected addField(
+        scope: LuaScope,
         id: string,
         field: string,
         expression: LuaExpression,
@@ -600,7 +614,12 @@ export class AnalysisContext {
             info.definitions.set(field, fieldDefs)
         }
 
-        fieldDefs.push({ expression, index, instance })
+        fieldDefs.push({
+            expression,
+            index,
+            instance,
+            functionLevel: !scope.id.startsWith('@module'),
+        })
     }
 
     /**
@@ -1119,24 +1138,33 @@ export class AnalysisContext {
                     this.resolveTypes(expr).forEach((x) => staticTypes.add(x))
                 }
 
-                const types = this.finalizeTypes(staticTypes)
-
-                let expression: LuaExpression | undefined = undefined
-                if (staticExprs.length === 1) {
-                    expression = staticExprs[0]?.expression
-                } else if (types.size === 1) {
-                    switch ([...types][0]) {
-                        case 'nil':
-                        case 'boolean':
-                        case 'string':
-                        case 'number':
-                            expression = staticExprs[0]?.expression
-                            break
-                    }
+                const moduleLevelDef = expressions.find((x) => !x.functionLevel)
+                if (!moduleLevelDef) {
+                    // no module-level def → assume optional
+                    staticTypes.add('nil')
                 }
 
-                if (expression) {
-                    expression = this.finalizeExpression(expression, refs)
+                let expression: LuaExpression | undefined
+                const types = this.finalizeTypes(staticTypes)
+
+                // only rewrite module-level definitions
+                if (moduleLevelDef) {
+                    if (staticExprs.length === 1) {
+                        expression = moduleLevelDef.expression
+                    } else if (types.size === 1) {
+                        switch ([...types][0]) {
+                            case 'nil':
+                            case 'boolean':
+                            case 'string':
+                            case 'number':
+                                expression = moduleLevelDef.expression
+                                break
+                        }
+                    }
+
+                    if (expression) {
+                        expression = this.finalizeExpression(expression, refs)
+                    }
                 }
 
                 staticFields.push({
@@ -1168,8 +1196,10 @@ export class AnalysisContext {
         seen?: Map<string, LuaExpression | null>,
     ): [LuaExpression | undefined, Set<string> | undefined] {
         let value: LuaExpression | undefined
-        if (defs.length === 1) {
-            // one def → try to rewrite as literal
+
+        // one def → try to rewrite as literal
+        // unless the one def was defined in a function
+        if (defs.length === 1 && !defs[0].functionLevel) {
             value = this.finalizeExpression(defs[0].expression, refs, seen)
         }
 
@@ -1182,6 +1212,11 @@ export class AnalysisContext {
             types = new Set()
             for (const def of defs) {
                 this.resolveTypes(def).forEach((x) => types!.add(x))
+            }
+
+            // no defs at module level → assume optional
+            if (!defs.find((x) => !x.functionLevel)) {
+                types.add('nil')
             }
 
             types = this.finalizeTypes(types)
@@ -2271,6 +2306,7 @@ export class AnalysisContext {
         rhs: LuaExpression,
     ): string | undefined {
         if (scope.type === 'function') {
+            // TODO: what is this for?
             if (scope.localIdToName(lhs.id) !== 'self') {
                 return
             }
