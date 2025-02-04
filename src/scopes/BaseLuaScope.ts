@@ -36,11 +36,6 @@ export class BaseLuaScope {
     items: AnalysisItem[]
 
     /**
-     * The base module scope. Undefined for module scopes.
-     */
-    moduleScope?: BaseLuaScope
-
-    /**
      * The table ID to use for a closure-based class.
      */
     classTableId?: string
@@ -55,29 +50,18 @@ export class BaseLuaScope {
      */
     protected idToLocal: Map<string, string>
 
-    protected nextIndexMap: Map<string, number> = new Map()
+    static nextIndexMap: Map<string, number> = new Map()
 
     constructor(args: BaseLuaScopeArgs) {
-        let parent = args.parent as BaseLuaScope | undefined
-
         this.id = '@unknown'
-        this.parent = parent
+        this.parent = args.parent
         this.node = args.node
         this.body = args.node.body
         this.items = []
-        this.depth = parent ? parent.depth + 1 : 0
+        this.depth = args.parent ? args.parent.depth + 1 : 0
 
         this.localToId = new Map()
         this.idToLocal = new Map()
-
-        while (parent) {
-            if (parent.parent) {
-                parent = parent.parent
-            } else {
-                this.moduleScope = parent
-                break
-            }
-        }
     }
 
     /**
@@ -195,12 +179,8 @@ export class BaseLuaScope {
      * Gets an ID to use for a local.
      */
     protected getNextLocalID(name: string, type: string = 'local'): string {
-        if (this.moduleScope) {
-            return this.moduleScope.getNextLocalID(name, type)
-        }
-
-        const nextIndex = this.nextIndexMap.get(type) ?? 1
-        this.nextIndexMap.set(type, nextIndex + 1)
+        const nextIndex = BaseLuaScope.nextIndexMap.get(type) ?? 1
+        BaseLuaScope.nextIndexMap.set(type, nextIndex + 1)
 
         if (type === 'self') {
             return `@${type}(${nextIndex})`
