@@ -598,7 +598,7 @@ export class AnalysisContext {
                 info.definitions.set(literalKey, fieldDefs)
             }
 
-            fieldDefs.push({ expression: field.value })
+            fieldDefs.push({ expression: field.value, fromLiteral: true })
         }
     }
 
@@ -1238,14 +1238,25 @@ export class AnalysisContext {
     ): [LuaExpression | undefined, Set<string> | undefined] {
         let value: LuaExpression | undefined
 
-        // one def → try to rewrite as literal
-        // unless the one def was defined in a function
+        let includeTypes = true
         if (defs.length === 1 && !defs[0].functionLevel) {
+            // one def → rewrite unless defined in a function
             value = this.finalizeExpression(defs[0].expression, refs, seen)
+            includeTypes = false
+        } else {
+            // defined in literal → rewrite, but include types
+            const literalDef = defs.find((x) => x.fromLiteral)
+
+            if (literalDef) {
+                value = this.finalizeExpression(
+                    literalDef.expression,
+                    refs,
+                    seen,
+                )
+            }
         }
 
-        const includeTypes =
-            !value || (value.type === 'reference' && refs.get(value.id) !== 1)
+        includeTypes ||= value?.type === 'reference' && refs.get(value.id) !== 1
 
         let types: Set<string> | undefined
         if (includeTypes) {

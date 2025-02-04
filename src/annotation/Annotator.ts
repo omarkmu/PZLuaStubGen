@@ -842,9 +842,7 @@ export class Annotator extends BaseReporter {
                 writtenFields.add(autoKey)
             }
 
-            const valueString = typeString
-                ? 'nil'
-                : this.getExpressionString(field.value, depth + 1)
+            const valueString = this.getExpressionString(field.value, depth + 1)
 
             if (typeString && this.isLiteralTable(field.value)) {
                 if (out.length > 1) {
