@@ -234,11 +234,23 @@ export class AnalysisContext {
                     continue
                 }
 
-                const defs = this.definitions.get(id) ?? []
-                const [expression, types] = this.finalizeDefinitions(
-                    defs,
-                    localReferences,
-                )
+                let expression: LuaExpression | undefined
+                let types: Set<string> | undefined
+                if (id.startsWith('@function')) {
+                    const info = this.finalizeFunction(id, '@local')
+                    expression = {
+                        type: 'literal',
+                        luaType: 'function',
+                        parameters: info.parameters,
+                        returnTypes: info.returnTypes,
+                    }
+                } else {
+                    const defs = this.definitions.get(id) ?? []
+                    ;[expression, types] = this.finalizeDefinitions(
+                        defs,
+                        localReferences,
+                    )
+                }
 
                 const local: AnalyzedLocal = {
                     name,
@@ -1625,10 +1637,9 @@ export class AnalysisContext {
             const info = this.getTableInfo(cls.tableId)
             for (const def of info.definitions.values()) {
                 stack.push(
-                    ...def.map((x): [LuaExpression, number] => [
-                        x.expression,
-                        0,
-                    ]),
+                    ...def
+                        .filter((x) => !x.functionLevel)
+                        .map((x): [LuaExpression, number] => [x.expression, 0]),
                 )
             }
 
@@ -1710,10 +1721,14 @@ export class AnalysisContext {
 
                     const info = this.getTableInfo(tableId)
                     for (const expressions of info.definitions.values()) {
-                        // if there are multiple defs, count as multiple refs
-                        const count = expressions.length === 1 ? defaultRefs : 1
+                        const moduleExprs = expressions.filter(
+                            (x) => !x.functionLevel,
+                        )
 
-                        expressions.forEach((x) =>
+                        // if there are multiple module-level defs, count as multiple refs
+                        const count = moduleExprs.length === 1 ? defaultRefs : 1
+
+                        moduleExprs.forEach((x) =>
                             stack.push([x.expression, count]),
                         )
                     }

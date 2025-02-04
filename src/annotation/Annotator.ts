@@ -640,8 +640,12 @@ export class Annotator extends BaseReporter {
         for (const local of mod.locals) {
             let typeString: string | undefined
             const prefix = this.getFunctionPrefixFromExpr(local.expression)
-            if (prefix) {
+
+            if (out.length > 1) {
                 out.push('\n')
+            }
+
+            if (prefix) {
                 out.push(prefix)
             } else if (local.types) {
                 typeString = this.getTypeString(local.types)
@@ -750,9 +754,10 @@ export class Annotator extends BaseReporter {
         let nextAutoKey = 1
         for (const field of fields) {
             let skip = false
+            const isRef = field.value.type === 'reference'
 
             let typeString: string | undefined
-            if (field.types && field.types.size > 0) {
+            if (field.types && field.types.size > 0 && !isRef) {
                 typeString = this.getTypeString(field.types)
             }
 
