@@ -78,8 +78,7 @@ export abstract class BaseReporter {
                 await this.outputFile(outFile, json)
                 console.log(`Report generated at ${path.resolve(outFile)}`)
             } catch (e) {
-                console.error(e)
-                this.errors.push(`Failed to create file ${outFile}`)
+                this.errors.push(`Failed to create file '${outFile}': ${e}`)
             }
         } else {
             console.log(json)
