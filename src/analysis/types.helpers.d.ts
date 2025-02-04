@@ -238,11 +238,17 @@ export interface AnalyzedLocal {
     types?: Set<string>
 }
 
+export interface AnalyzedRequire {
+    name: string
+    module: string
+}
+
 export interface AnalyzedModule {
     id: string
     locals: AnalyzedLocal[]
     functions: AnalyzedFunction[]
     classes: AnalyzedClass[]
+    requires: AnalyzedRequire[]
     returns: AnalyzedReturn[]
 }
 

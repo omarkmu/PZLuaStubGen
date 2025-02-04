@@ -28,6 +28,8 @@ import {
     ResolvedModule,
     TableKey,
     AnalyzedLocal,
+    ResolvedRequireInfo,
+    AnalyzedRequire,
 } from './types'
 
 /**
@@ -122,20 +124,13 @@ export class AnalysisContext {
         const index = item.type === 'assignment' ? item.index : undefined
         switch (lhs.type) {
             case 'reference':
-                if (item.type !== 'requireAssignment') {
-                    const tableId = this.tryAddPartialItem(
-                        scope,
-                        item,
-                        lhs,
-                        rhs,
-                    )
+                const tableId = this.tryAddPartialItem(scope, item, lhs, rhs)
 
-                    if (tableId) {
-                        rhs = {
-                            type: 'literal',
-                            luaType: 'table',
-                            tableId,
-                        }
+                if (tableId) {
+                    rhs = {
+                        type: 'literal',
+                        luaType: 'table',
+                        tableId,
                     }
                 }
 
@@ -211,6 +206,11 @@ export class AnalysisContext {
                 classes.push(this.finalizeClass(cls, localReferences))
             }
 
+            const requires: AnalyzedRequire[] = []
+            for (const req of mod.requires) {
+                requires.push(req)
+            }
+
             const functions: AnalyzedFunction[] = []
             for (const func of mod.functions) {
                 functions.push(
@@ -273,6 +273,7 @@ export class AnalysisContext {
                 locals,
                 classes,
                 functions,
+                requires,
                 returns,
             })
         }
@@ -324,6 +325,7 @@ export class AnalysisContext {
         // resolve classes, functions, and returns
         const classes: ResolvedClassInfo[] = []
         const functions: ResolvedFunctionInfo[] = []
+        const requires: ResolvedRequireInfo[] = []
 
         for (const item of scope.items) {
             switch (item.type) {
@@ -334,6 +336,10 @@ export class AnalysisContext {
 
                     if (item.functionInfo) {
                         functions.push(item.functionInfo)
+                    }
+
+                    if (item.requireInfo) {
+                        requires.push(item.requireInfo)
                     }
 
                     break
@@ -367,6 +373,7 @@ export class AnalysisContext {
                     if (item.type === 'resolved') {
                         item.functions.forEach((x) => functions.push(x))
                         item.classes.forEach((x) => classes.push(x))
+                        item.requires.forEach((x) => requires.push(x))
                     }
 
                     break
@@ -401,6 +408,7 @@ export class AnalysisContext {
             classes,
             functions,
             returns,
+            requires,
         }
     }
 
@@ -2361,7 +2369,7 @@ export class AnalysisContext {
 
     protected tryAddPartialItem(
         scope: LuaScope,
-        item: AssignmentItem | FunctionDefinitionItem,
+        item: AssignmentItem | RequireAssignmentItem | FunctionDefinitionItem,
         lhs: LuaReference,
         rhs: LuaExpression,
     ): string | undefined {
@@ -2376,6 +2384,18 @@ export class AnalysisContext {
 
         // module and module-level blocks, excluding functions
         if (!scope.id.startsWith('@module')) {
+            return
+        }
+
+        if (item.type === 'requireAssignment') {
+            scope.items.push({
+                type: 'partial',
+                requireInfo: {
+                    name: lhs.id,
+                    module: item.rhs.module,
+                },
+            })
+
             return
         }
 

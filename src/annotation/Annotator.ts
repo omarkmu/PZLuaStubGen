@@ -49,6 +49,10 @@ export class Annotator extends BaseReporter {
     generateStub(mod: AnalyzedModule) {
         const out = [PREAMBLE]
 
+        if (this.writeRequires(mod, out)) {
+            out.push('\n')
+        }
+
         if (this.writeLocals(mod, out)) {
             out.push('\n')
         }
@@ -697,6 +701,32 @@ export class Annotator extends BaseReporter {
         out.push(returns.join(', '))
 
         return true
+    }
+
+    protected writeRequires(mod: AnalyzedModule, out: string[]): boolean {
+        if (mod.requires.length === 0) {
+            return false
+        }
+
+        let count = 0
+        for (const req of mod.requires) {
+            const rosettaClass: RosettaLuaClass | undefined =
+                this.rosetta.luaClasses[req.name]
+
+            // skip global requires that have a rosetta class defined
+            if (rosettaClass) {
+                continue
+            }
+
+            if (out.length > 1) {
+                out.push('\n')
+            }
+
+            out.push(`\n${req.name} = require("${req.module}")`)
+            count++
+        }
+
+        return count > 0
     }
 
     protected writeRosettaFunction(

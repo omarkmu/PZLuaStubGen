@@ -171,6 +171,12 @@ export interface ResolvedFunctionInfo {
     functionId: string
 }
 
+export interface ResolvedRequireInfo {
+    name: string
+
+    module: string
+}
+
 export interface ResolvedScopeItem extends BaseAnalysisItem {
     type: 'resolved'
 
@@ -181,6 +187,8 @@ export interface ResolvedScopeItem extends BaseAnalysisItem {
     functions: ResolvedFunctionInfo[]
 
     returns: ResolvedReturnInfo[]
+
+    requires: ResolvedRequireInfo[]
 }
 
 export interface ResolvedModule extends ResolvedScopeItem {
@@ -193,6 +201,8 @@ export interface PartialItem extends BaseAnalysisItem {
     classInfo?: ResolvedClassInfo
 
     functionInfo?: ResolvedFunctionInfo
+
+    requireInfo?: ResolvedRequireInfo
 }
 
 export interface LuaExpressionInfo {
@@ -294,6 +304,7 @@ export {
     AnalyzedFunction,
     AnalyzedField,
     AnalyzedClass,
+    AnalyzedRequire,
     AnalyzedReturn,
     AnalyzedModule,
 } from './types.helpers'
