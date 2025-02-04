@@ -62,6 +62,10 @@ const annotateCommand = (yargs: yargs.Argv) => {
             type: 'boolean',
             conflicts: ['subdirectories'],
         })
+        .option('rosetta', {
+            type: 'string',
+            default: 'assets/rosetta',
+        })
         .check((args) => {
             if (!fs.existsSync(path.resolve(args['input-directory']))) {
                 throw 'Input directory does not exist.'
