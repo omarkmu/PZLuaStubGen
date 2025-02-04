@@ -2,118 +2,95 @@ import fs from 'fs'
 import path from 'path'
 import yargs from 'yargs'
 import { hideBin } from 'yargs/helpers'
+import { ResolveArgs, Resolver } from './dependency-resolution'
+import { AnalyzeArgs, Analyzer } from './analysis'
+import { AnnotateArgs, Annotator } from './annotation'
 
-import { AnnotateArgs } from './types'
-import { annotate } from './annotator'
-import { parse } from './parser'
-
-import { Rosetta } from 'pz-rosetta-ts/lib/asledgehammer/rosetta/Rosetta'
-
-const annotateFiles = async (options: AnnotateArgs) => {
-
-    const rosetta = new Rosetta()
-
-    try {
-        rosetta.load(options.rosetta)
-    } catch (e) {
-        console.log(`Failed to load rosetta; creating fallback annotations. ${e}`)
-    }
-
-    // TODO: ultimately will be replaced with YAML definition
-    const kahlua = fs.readFileSync(path.join(__dirname, 'kahlua.lua'))
-
-    const inDir = path.resolve(options.in)
-    const outDir = path.resolve(options.out)
-
-    const errors = []
-
-    const stack = [inDir]
-    while (stack.length > 0) {
-        const dirPath = stack.pop()!
-
-        let dir: fs.Dir
-        try {
-            dir = await fs.promises.opendir(dirPath)
-        } catch (e) {
-            errors.push(`Failed to open directory: ${dirPath}`)
-            continue
-        }
-
-        for await (const fileOrDirectory of dir) {
-            const fullPath = path.join(dirPath, fileOrDirectory.name)
-            if (fileOrDirectory.isDirectory()) {
-                stack.push(fullPath)
-                continue
-            } else if (!fileOrDirectory.isFile() || path.extname(fullPath) !== '.lua') {
-                continue
+/**
+ * Adds the shared CLI options for report commands.
+ */
+const reportCommand = (yargs: yargs.Argv) => {
+    return yargs
+        .option('input-directory', {
+            type: 'string',
+            alias: 'i',
+            required: true,
+        })
+        .option('out-file', {
+            type: 'string',
+            alias: 'o',
+        })
+        .option('subdirectories', {
+            type: 'array',
+            string: true,
+            conflicts: ['no-subdirectories'],
+        })
+        .option('no-subdirectories', {
+            type: 'boolean',
+            conflicts: ['subdirectories'],
+        })
+        .check((args) => {
+            if (!fs.existsSync(path.resolve(args['input-directory']))) {
+                throw 'Input directory does not exist.'
             }
 
-            let content
-            try {
-                const file = await fs.promises.open(fullPath)
-                content = await file.readFile('utf-8')
-                await file.close()
-            } catch (e) {
-                errors.push(`Failed to read file: ${fullPath}`)
-                continue
+            return true
+        })
+}
+
+/**
+ * Adds the CLI options for the annotate command.
+ */
+const annotateCommand = (yargs: yargs.Argv) => {
+    return yargs
+        .option('input-directory', {
+            type: 'string',
+            alias: 'i',
+            required: true,
+        })
+        .option('output-directory', {
+            type: 'string',
+            alias: 'o',
+            required: true,
+        })
+        .option('subdirectories', {
+            type: 'array',
+            string: true,
+            conflicts: ['no-subdirectories'],
+        })
+        .option('no-subdirectories', {
+            type: 'boolean',
+            conflicts: ['subdirectories'],
+        })
+        .check((args) => {
+            if (!fs.existsSync(path.resolve(args['input-directory']))) {
+                throw 'Input directory does not exist.'
             }
 
-            const parsed = parse(content)
-            if (!parsed.success) {
-                errors.push(`Failed to parse file: ${fullPath}`)
-                continue
-            }
-
-            const annotated = annotate(rosetta, parsed.result, path.basename(fullPath, '.lua'), options)
-            const outputPath = path.join(outDir, path.relative(inDir, fullPath))
-            try {
-                await fs.promises.mkdir(path.dirname(outputPath), { recursive: true })
-                await fs.promises.writeFile(outputPath, annotated, { flag: 'w' })
-            } catch (e) {
-                errors.push(`Failed to create file: ${outputPath}`)
-                continue
-            }
-        }
-    }
-
-    if (options['include-kahlua']) {
-        const outputPath = path.join(outDir, '__kahlua.lua')
-
-        try {
-            await fs.promises.mkdir(path.dirname(outputPath), { recursive: true })
-            await fs.promises.writeFile(outputPath, kahlua, { flag: 'w' })
-        } catch (e) {
-            errors.push(`Failed to create file: ${outputPath}`)
-        }
-    }
-
-    for (const error of errors) {
-        console.error(error)
-    }
+            return true
+        })
 }
 
 yargs(hideBin(process.argv))
-    .version('0.0.0')
-    .scriptName('pz-luadoc')
-    .command('annotate', 'Annotate the files in a given directory',
-        (yargs: yargs.Argv) => {
-            return yargs
-                .option('in', { type: 'string', alias: 'i', required: true })
-                .option('out', { type: 'string', alias: 'o', required: true })
-                .option('verbose', { type: 'boolean', alias: 'v' })
-                .option('include-kahlua', { type: 'boolean', alias: 'k' })
-                .option('strict-fields', { type: 'boolean' })
-                .option('rosetta', {type : 'string', default: 'assets/rosetta' })
-                .check(args => {
-                    const inDir = path.resolve(args.in)
-                    if (!fs.existsSync(inDir)) {
-                        return 'Input directory does not exist.'
-                    }
-
-                    return true
-                })
-        },
-        annotateFiles
+    .scriptName('pz-doc')
+    .command(
+        'report-deps',
+        'Reports on requires, global reads/writes, and the resolved analysis order',
+        reportCommand,
+        async (args: ResolveArgs) => await new Resolver(args).generateReport(),
     )
+    .command(
+        'report-analysis',
+        'Reports on analyzed and inferred Lua types',
+        reportCommand,
+        async (args: AnalyzeArgs) => await new Analyzer(args).generateReport(),
+    )
+    .command(
+        'annotate',
+        'Generates typestubs for Lua files',
+        annotateCommand,
+        (async (args: AnnotateArgs) => await new Annotator(args).run()) as any,
+    )
+    .demandCommand()
     .parseAsync()
-    .catch(e => console.error(e))
+    .catch((e) => console.error(e))
