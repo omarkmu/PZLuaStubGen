@@ -41,6 +41,8 @@ export class AnalysisContext {
 
     protected aliasMap: Map<string, Set<string>>
 
+    protected currentModule: string
+
     /**
      * Definitions for items.
      */
@@ -82,6 +84,7 @@ export class AnalysisContext {
     protected modules: Map<string, ResolvedModule>
 
     constructor() {
+        this.currentModule = ''
         this.aliasMap = new Map()
         this.tableToID = new Map()
         this.functionToID = new Map()
@@ -203,7 +206,7 @@ export class AnalysisContext {
 
             const classes: AnalyzedClass[] = []
             for (const cls of mod.classes) {
-                classes.push(this.finalizeClass(cls, localReferences))
+                classes.push(this.finalizeClass(cls, localReferences, id))
             }
 
             const requires: AnalyzedRequire[] = []
@@ -416,6 +419,10 @@ export class AnalysisContext {
         this.aliasMap = map
     }
 
+    setReadingModule(name?: string) {
+        this.currentModule = name ?? ''
+    }
+
     /**
      * Sets up basic info for a function.
      */
@@ -532,6 +539,7 @@ export class AnalysisContext {
                         expression: info.expression,
                         index: info.index,
                         instance: true,
+                        definingModule: this.currentModule,
                         functionLevel: !scope.id.startsWith('@module'),
                     })
                 }
@@ -598,7 +606,11 @@ export class AnalysisContext {
                 info.definitions.set(literalKey, fieldDefs)
             }
 
-            fieldDefs.push({ expression: field.value, fromLiteral: true })
+            fieldDefs.push({
+                expression: field.value,
+                definingModule: this.currentModule,
+                fromLiteral: true,
+            })
         }
     }
 
@@ -617,6 +629,7 @@ export class AnalysisContext {
         defs.push({
             expression,
             index,
+            definingModule: this.currentModule,
             functionLevel: !scope.id.startsWith('@module'),
         })
     }
@@ -645,6 +658,7 @@ export class AnalysisContext {
             expression,
             index,
             instance,
+            definingModule: this.currentModule,
             functionLevel: !scope.id.startsWith('@module'),
         })
     }
@@ -826,6 +840,7 @@ export class AnalysisContext {
                     classInfo: {
                         name,
                         tableId,
+                        definingModule: this.currentModule,
                         base: baseClass ? `${baseClass}_Instance` : undefined,
                         generated: true,
                     },
@@ -894,6 +909,7 @@ export class AnalysisContext {
                         classInfo: {
                             name,
                             tableId,
+                            definingModule: this.currentModule,
                         },
                     })
                 }
@@ -903,12 +919,23 @@ export class AnalysisContext {
         return [parameters, parameterTypes, returnTypes]
     }
 
-    protected checkClassTable(
-        expr: LuaExpression,
-        scope: LuaScope,
-    ): string | undefined {
+    protected checkClassTable(expr: LuaExpression): string | undefined {
         if (expr.type === 'operation' && expr.operator === 'call') {
             return
+        }
+
+        if (expr.type === 'operation' && expr.operator === 'or') {
+            const orLhs = expr.arguments[0]
+            const orRhs = expr.arguments[1]
+            const orRhsFields = (orRhs.type === 'literal' && orRhs.fields) || []
+
+            // X = X or {} → treat as X
+            if (orLhs.type === 'reference' && orRhsFields.length === 0) {
+                const result = this.checkClassTable(orLhs)
+                if (result) {
+                    return result
+                }
+            }
         }
 
         const typeSet = this.resolveTypes({ expression: expr })
@@ -1038,8 +1065,10 @@ export class AnalysisContext {
     protected finalizeClass(
         cls: ResolvedClassInfo,
         refs: Map<string, number>,
+        moduleId: string,
     ): AnalyzedClass {
         const info = this.getTableInfo(cls.tableId)
+        const isClassDefiner = cls.definingModule === moduleId
 
         const fields: AnalyzedField[] = []
         const literalFields: TableField[] = []
@@ -1050,45 +1079,60 @@ export class AnalysisContext {
         const functionConstructors: AnalyzedFunction[] = []
 
         const literalKeys = new Set<string>()
-        for (const field of info.literalFields) {
-            let key: TableKey
-            switch (field.key.type) {
-                case 'auto':
-                    key = field.key
-                    literalKeys.add(`[${field.key.index}]`)
-                    break
 
-                case 'string':
-                    key = field.key
-                    literalKeys.add(field.key.name)
-                    break
+        if (isClassDefiner) {
+            for (const field of info.literalFields) {
+                let key: TableKey
+                switch (field.key.type) {
+                    case 'auto':
+                        key = field.key
+                        literalKeys.add(`[${field.key.index}]`)
+                        break
 
-                case 'literal':
-                    key = field.key
-                    literalKeys.add(`[${field.key.literal}]`)
-                    break
+                    case 'string':
+                        key = field.key
+                        literalKeys.add(field.key.name)
+                        break
 
-                case 'expression':
-                    const expr = this.finalizeExpression(
-                        field.key.expression,
-                        refs,
-                    )
+                    case 'literal':
+                        key = field.key
+                        literalKeys.add(`[${field.key.literal}]`)
+                        break
 
-                    key = {
-                        type: 'expression',
-                        expression: expr,
-                    }
+                    case 'expression':
+                        const expr = this.finalizeExpression(
+                            field.key.expression,
+                            refs,
+                        )
 
-                    break
+                        key = {
+                            type: 'expression',
+                            expression: expr,
+                        }
+
+                        break
+                }
+
+                literalFields.push({
+                    key,
+                    value: this.finalizeExpression(field.value, refs),
+                })
             }
-
-            literalFields.push({
-                key,
-                value: this.finalizeExpression(field.value, refs),
-            })
         }
 
-        for (const [field, expressions] of info.definitions) {
+        for (let [field, expressions] of info.definitions) {
+            expressions = expressions.filter((x) => {
+                if (!x.definingModule) {
+                    return isClassDefiner
+                }
+
+                return x.definingModule === moduleId
+            })
+
+            if (expressions.length === 0) {
+                continue
+            }
+
             const functionExpr = expressions.find((x) => {
                 return (
                     (cls.generated || !x.functionLevel) &&
@@ -2447,24 +2491,20 @@ export class AnalysisContext {
             return
         }
 
-        const tableId = !base
-            ? this.checkClassTable(rhs, scope)
-            : this.newTableID()
+        const tableId = !base ? this.checkClassTable(rhs) : this.newTableID()
 
         // global table or derive call → class
         if (tableId) {
             const tableInfo = this.getTableInfo(tableId)
-            if (tableInfo.className) {
-                // already has a class
-                return
-            }
+            tableInfo.className ??= lhs.id
+            tableInfo.definingModule ??= this.currentModule
 
-            tableInfo.className = lhs.id
             scope.items.push({
                 type: 'partial',
                 classInfo: {
                     name: lhs.id,
                     tableId,
+                    definingModule: tableInfo.definingModule,
                     base: base ?? tableInfo.originalBase,
                     deriveName: deriveName ?? tableInfo.originalDeriveName,
                 },

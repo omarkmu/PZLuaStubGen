@@ -160,6 +160,7 @@ export interface UsageItem extends BaseAnalysisItem {
 export interface ResolvedClassInfo {
     name: string
     tableId: string
+    definingModule: string
     base?: string
     deriveName?: string
     generated?: boolean
@@ -215,6 +216,8 @@ export interface LuaExpressionInfo {
     functionLevel?: boolean
 
     fromLiteral?: boolean
+
+    definingModule?: string
 }
 
 export interface ResolvedReturnInfo {
@@ -272,6 +275,11 @@ export interface TableInfo {
      * Maps Lua literal keys to expressions for their definitions.
      */
     definitions: Map<string, LuaExpressionInfo[]>
+
+    /**
+     * The module in which the initial definition of the class was found.
+     */
+    definingModule?: string
 
     /**
      * The class assigned to this table.
