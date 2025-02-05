@@ -1450,12 +1450,13 @@ export class AnalysisContext {
 
     protected finalizeFunction(id: string, name: string): AnalyzedFunction {
         const info = this.getFunctionInfo(id)
-        const isMethod = info.identifierExpression?.type === 'member'
+        const expr = info.identifierExpression
+        const isMethod = expr?.type === 'member' && expr.indexer === ':'
 
         const parameters: AnalyzedParameter[] = []
         for (let i = 0; i < info.parameters.length; i++) {
             const name = info.parameterNames[i]
-            if (isMethod && name === 'self') {
+            if (isMethod && i === 0) {
                 continue
             }
 
