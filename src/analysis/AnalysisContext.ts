@@ -2209,6 +2209,17 @@ export class AnalysisContext {
                     break
                 }
 
+                if (func.type === 'reference') {
+                    if (func.id === 'tonumber') {
+                        types.add('number')
+                        types.add('nil')
+                        break
+                    } else if (func.id === 'tostring') {
+                        types.add('string')
+                        break
+                    }
+                }
+
                 const resolvedFuncTypes = this.resolveTypes(
                     { expression: func },
                     seen,
