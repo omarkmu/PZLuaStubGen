@@ -358,8 +358,10 @@ export class AnalysisContext {
                 case 'returns':
                     const funcInfo = this.getFunctionInfo(item.id)
 
-                    const min = funcInfo.minReturns ?? Number.MAX_VALUE
-                    funcInfo.minReturns = Math.min(min, item.returns.length)
+                    funcInfo.minReturns = Math.min(
+                        funcInfo.minReturns ?? Number.MAX_VALUE,
+                        item.returns.length,
+                    )
 
                     // don't add returns to a class constructor
                     if (funcInfo.isConstructor) {
@@ -385,19 +387,17 @@ export class AnalysisContext {
                         types.forEach((x) => funcInfo.returnTypes[i].add(x))
                     }
 
+                    const min = funcInfo.minReturns
+                    if (!min || funcInfo.returnTypes.length <= min) {
+                        continue
+                    }
+
+                    // mark returns exceeding the minimum as nullable
+                    for (let i = min; i < funcInfo.returnTypes.length; i++) {
+                        funcInfo.returnTypes[i].add('nil')
+                    }
+
                     break
-            }
-        }
-
-        // mark returns exceeding the minimum as nullable
-        for (const [, info] of this.idToFunctionInfo) {
-            const min = info.minReturns
-            if (!min || info.returnTypes.length <= min) {
-                continue
-            }
-
-            for (let i = min; i < info.returnTypes.length; i++) {
-                info.returnTypes[i].add('nil')
             }
         }
 
