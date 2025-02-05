@@ -23,9 +23,9 @@ const reportCommand = (yargs: yargs.Argv) => {
         .option('subdirectories', {
             type: 'array',
             string: true,
-            conflicts: ['no-subdirectories'],
+            conflicts: ['all-subdirectories'],
         })
-        .option('no-subdirectories', {
+        .option('all-subdirectories', {
             type: 'boolean',
             conflicts: ['subdirectories'],
         })
@@ -56,9 +56,9 @@ const annotateCommand = (yargs: yargs.Argv) => {
         .option('subdirectories', {
             type: 'array',
             string: true,
-            conflicts: ['no-subdirectories'],
+            conflicts: ['all-subdirectories'],
         })
-        .option('no-subdirectories', {
+        .option('all-subdirectories', {
             type: 'boolean',
             conflicts: ['subdirectories'],
         })

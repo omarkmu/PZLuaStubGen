@@ -26,7 +26,7 @@ export abstract class BaseReporter {
             'server',
         ]
 
-        if (args.noSubdirectories) {
+        if (args.allSubdirectories) {
             this.subdirectories = []
         } else {
             this.subdirectories = this.subdirectories.filter(

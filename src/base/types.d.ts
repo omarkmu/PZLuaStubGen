@@ -18,9 +18,10 @@ interface BaseArgs {
     subdirectories?: string[]
 
     /**
-     * If given, the subdirectories array will be treated as empty.
+     * If given, all subdirectories will be read.
+     * This will make it so that the `subdirectories` option is ignored.
      */
-    noSubdirectories?: boolean
+    allSubdirectories?: boolean
 
     /**
      * An array to use to store errors.
