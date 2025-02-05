@@ -203,11 +203,12 @@ export class AnalysisContext {
         const modules = new Map<string, AnalyzedModule>()
 
         for (const [id, mod] of this.modules) {
+            this.currentModule = id
             const localReferences = this.getReferences(mod)
 
             const classes: AnalyzedClass[] = []
             for (const cls of mod.classes) {
-                classes.push(this.finalizeClass(cls, localReferences, id))
+                classes.push(this.finalizeClass(cls, localReferences))
             }
 
             const requires: AnalyzedRequire[] = []
@@ -282,6 +283,7 @@ export class AnalysisContext {
             })
         }
 
+        this.currentModule = ''
         return modules
     }
 
@@ -1128,10 +1130,9 @@ export class AnalysisContext {
     protected finalizeClass(
         cls: ResolvedClassInfo,
         refs: Map<string, number>,
-        moduleId: string,
     ): AnalyzedClass {
         const info = this.getTableInfo(cls.tableId)
-        const isClassDefiner = cls.definingModule === moduleId
+        const isClassDefiner = cls.definingModule === this.currentModule
 
         const fields: AnalyzedField[] = []
         const literalFields: TableField[] = []
@@ -1189,7 +1190,7 @@ export class AnalysisContext {
                     return isClassDefiner
                 }
 
-                return x.definingModule === moduleId
+                return x.definingModule === this.currentModule
             })
 
             if (expressions.length === 0) {
@@ -1594,7 +1595,15 @@ export class AnalysisContext {
         const fields: TableField[] = []
 
         let nextAutoKey = 1
-        for (const [defKey, defs] of info.definitions) {
+        for (let [defKey, defs] of info.definitions) {
+            const filtered = defs.filter(
+                (x) => x.definingModule === this.currentModule,
+            )
+
+            if (filtered.length === 0) {
+                continue
+            }
+
             const fieldKey = LuaHelpers.getLuaFieldKey(defKey)
             const [value, types] = this.finalizeDefinitions(defs, refs, seen)
 
