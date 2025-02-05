@@ -388,7 +388,7 @@ export abstract class BaseReader {
         // replacement based on PipeWrench-Modeler
         source = source.replace(/(\d)[lf]([,;)\s])/g, '$1$2')
 
-        source = source.replace(/\\%/g, ' %') // ISZoneDisplay edge case
+        source = source.replace(/[^\\]\\%/g, ' %') // ISZoneDisplay edge case
 
         return source
     }
