@@ -15,10 +15,13 @@ export abstract class BaseReporter {
 
     constructor(args: BaseReportArgs) {
         this.inDirectory = path.normalize(args.inputDirectory)
-        this.outFile = args.outFile ? path.normalize(args.outFile) : undefined
         this.errors = args.errors ?? []
         this.fileSet = new Set()
         this.suppressErrors = args.suppressErrors ?? false
+
+        this.outFile = args.outputFile
+            ? path.normalize(args.outputFile)
+            : undefined
 
         this.subdirectories = args.subdirectories ?? [
             'shared',

@@ -43,7 +43,7 @@ interface BaseReportArgs extends BaseArgs {
      * If the given string does not end with `.json`, this is interpreted as a directory
      * and the output is sent to `report.json` in that directory.
      */
-    outFile?: string
+    outputFile?: string
 }
 
 /**
