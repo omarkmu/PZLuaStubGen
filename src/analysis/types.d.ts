@@ -310,6 +310,11 @@ export interface TableInfo {
      * The name of the class type, for hidden classes that are ultimately assigned to a global.
      */
     originalDeriveName?: string
+
+    /**
+     * Flag for a table belonging to an overwritten class.
+     */
+    isEmptyClass?: boolean
 }
 
 export {

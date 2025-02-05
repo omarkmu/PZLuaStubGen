@@ -334,7 +334,10 @@ export class AnalysisContext {
             switch (item.type) {
                 case 'partial':
                     if (item.classInfo) {
-                        classes.push(item.classInfo)
+                        const info = this.getTableInfo(item.classInfo.tableId)
+                        if (!info.isEmptyClass) {
+                            classes.push(item.classInfo)
+                        }
                     }
 
                     if (item.functionInfo) {
@@ -1933,6 +1936,45 @@ export class AnalysisContext {
         return types
     }
 
+    protected removeEmptyDefinition(name: string) {
+        const defs = this.definitions.get(name)
+
+        // single def?
+        if (!defs || defs.length !== 1) {
+            return
+        }
+
+        // belongs to this module?
+        const def = defs[0]
+        if (def.definingModule !== this.currentModule) {
+            return
+        }
+
+        // table?
+        const expr = def.expression
+        if (expr.type !== 'literal' || expr.luaType !== 'table') {
+            return
+        }
+
+        if (!expr.tableId) {
+            return
+        }
+
+        // empty?
+        if (expr.fields && expr.fields.length > 0) {
+            return
+        }
+
+        const info = this.getTableInfo(expr.tableId)
+        if (info.definitions.size > 0) {
+            return
+        }
+
+        // remove the empty table definition
+        info.isEmptyClass = true
+        defs.splice(0, defs.length)
+    }
+
     /**
      * Resolves an expression into a basic literal, if it can be determined
      * to be resolvable to one.
@@ -2498,6 +2540,8 @@ export class AnalysisContext {
             const tableInfo = this.getTableInfo(tableId)
             tableInfo.className ??= lhs.id
             tableInfo.definingModule ??= this.currentModule
+
+            this.removeEmptyDefinition(lhs.id) // ThermoDebug edge case
 
             scope.items.push({
                 type: 'partial',
