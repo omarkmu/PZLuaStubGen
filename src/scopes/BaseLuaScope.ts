@@ -41,6 +41,11 @@ export class BaseLuaScope {
     classTableId?: string
 
     /**
+     * The local identifier for a closure-based class.
+     */
+    classSelfName?: string
+
+    /**
      * Maps locals defined in this scope to their IDs.
      */
     protected localToId: Map<string, string>

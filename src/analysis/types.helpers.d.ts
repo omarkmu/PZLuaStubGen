@@ -204,6 +204,7 @@ export interface AnalyzedFunction {
     name: string
     parameters: AnalyzedParameter[]
     returnTypes: Set<string>[]
+    isConstructor: boolean
 }
 
 export interface AnalyzedField {

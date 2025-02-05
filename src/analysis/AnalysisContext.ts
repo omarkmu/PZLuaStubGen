@@ -30,6 +30,7 @@ import {
     AnalyzedLocal,
     ResolvedRequireInfo,
     AnalyzedRequire,
+    LuaMember,
 } from './types'
 
 /**
@@ -350,12 +351,20 @@ export class AnalysisContext {
 
                     break
 
-                case 'returns':
                 case 'resolved':
+                    item.functions.forEach((x) => functions.push(x))
+                    item.classes.forEach((x) => classes.push(x))
+                    item.requires.forEach((x) => requires.push(x))
+                case 'returns':
                     const funcInfo = this.getFunctionInfo(item.id)
 
                     const min = funcInfo.minReturns ?? Number.MAX_VALUE
                     funcInfo.minReturns = Math.min(min, item.returns.length)
+
+                    // don't add returns to a class constructor
+                    if (funcInfo.isConstructor) {
+                        break
+                    }
 
                     for (let i = 0; i < item.returns.length; i++) {
                         funcInfo.returnTypes[i] ??= new Set()
@@ -374,12 +383,6 @@ export class AnalysisContext {
                         }
 
                         types.forEach((x) => funcInfo.returnTypes[i].add(x))
-                    }
-
-                    if (item.type === 'resolved') {
-                        item.functions.forEach((x) => functions.push(x))
-                        item.classes.forEach((x) => classes.push(x))
-                        item.requires.forEach((x) => requires.push(x))
                     }
 
                     break
@@ -402,7 +405,7 @@ export class AnalysisContext {
         const returns = funcInfo.returnTypes.map(
             (returnTypes, i): ResolvedReturnInfo => {
                 return {
-                    types: returnTypes,
+                    types: new Set(returnTypes),
                     expressions: funcInfo.returnExpressions[i] ?? new Set(),
                 }
             },
@@ -435,11 +438,31 @@ export class AnalysisContext {
         node: ast.FunctionDeclaration,
         identExpr: LuaExpression | undefined,
     ): string[] {
-        const [parameters, parameterTypes, returnTypes] = this.checkClassMethod(
-            scope,
-            node,
-            identExpr,
-        )
+        const info = this.getFunctionInfo(functionId)
+        info.parameters = []
+        info.parameterTypes = []
+        info.returnTypes = []
+        info.identifierExpression = identExpr
+
+        if (identExpr?.type === 'member') {
+            if (identExpr.indexer === ':') {
+                const selfId =
+                    scope.getLocalId('self') ?? scope.addSelfParameter()
+
+                info.parameters.push(selfId)
+            }
+
+            const addedClosureClass = this.checkClosureClass(
+                scope,
+                node,
+                info,
+                identExpr,
+            )
+
+            if (!addedClosureClass && identExpr.indexer === ':') {
+                this.checkClassMethod(scope, info, identExpr)
+            }
+        }
 
         for (const param of node.parameters) {
             const paramId = scope.getLocalId(
@@ -447,22 +470,19 @@ export class AnalysisContext {
             )
 
             if (paramId) {
-                parameters.push(paramId)
+                info.parameters.push(paramId)
             }
         }
 
-        const info = this.getFunctionInfo(functionId)
-        info.parameters = parameters
-        info.parameterNames = parameters.map((x) => scope.localIdToName(x) ?? x)
-        info.parameterTypes = parameterTypes
-        info.returnTypes = returnTypes
-        info.identifierExpression = identExpr
+        info.parameterNames = info.parameters.map(
+            (x) => scope.localIdToName(x) ?? x,
+        )
 
-        for (const param of parameters) {
+        for (const param of info.parameters) {
             this.parameterToFunctionId.set(param, functionId)
         }
 
-        return parameters
+        return info.parameters
     }
 
     /**
@@ -651,6 +671,13 @@ export class AnalysisContext {
 
         const info = this.getTableInfo(id)
 
+        // treat closure-based classes' non-function fields as instance fields
+        if (info.isClosureClass) {
+            instance =
+                expression.type !== 'literal' ||
+                expression.luaType !== 'function'
+        }
+
         let fieldDefs = info.definitions.get(field)
         if (!fieldDefs) {
             fieldDefs = []
@@ -751,153 +778,25 @@ export class AnalysisContext {
 
     protected checkClassMethod(
         scope: LuaScope,
-        node: ast.FunctionDeclaration,
-        identExpr: LuaExpression | undefined,
-    ): [string[], Set<string>[], Set<string>[]] {
-        const parameters: string[] = []
-        const parameterTypes: Set<string>[] = []
-        const returnTypes: Set<string>[] = []
-
-        if (identExpr?.type !== 'member') {
-            return [parameters, parameterTypes, returnTypes]
-        }
-
-        if (identExpr.indexer === '.') {
-            const base = identExpr.base
-            if (base.type !== 'reference') {
-                return [parameters, parameterTypes, returnTypes]
-            }
-
-            const name = identExpr.member
-
-            // non-special methods don't need special handling
-            if (name !== 'new' && name !== 'getInstance') {
-                return [parameters, parameterTypes, returnTypes]
-            }
-
-            // setmetatable instances should be handled elsewhere
-            if (this.checkHasSetmetatableInstance(node)) {
-                return [parameters, parameterTypes, returnTypes]
-            }
-
-            const baseName = scope.localIdToName(base.id) ?? base.id
-
-            // all classes which use the `.new` pattern also set a local `self`
-            // this will be either a table or a call to the base class `.new`
-            let classTable: ast.TableConstructorExpression | undefined
-            let baseClass: string | undefined
-            for (const child of node.body) {
-                // local self = ...
-                if (child.type !== 'LocalStatement') {
-                    continue
-                }
-
-                const name = child.variables[0]?.name
-                if (name !== 'self') {
-                    continue
-                }
-
-                // local self = {}
-                const init = child.init[0]
-                if (init.type === 'TableConstructorExpression') {
-                    classTable = init
-                    break
-                }
-
-                // local self = X.new()
-                const base =
-                    init.type === 'CallExpression' ? init.base : undefined
-
-                if (base?.type !== 'MemberExpression') {
-                    continue
-                }
-
-                if (base.identifier.name !== 'new') {
-                    continue
-                }
-
-                const memberBase = base.base
-                if (memberBase.type !== 'Identifier') {
-                    continue
-                }
-
-                baseClass = memberBase.name
-                break
-            }
-
-            if (baseClass || classTable) {
-                const tableId = classTable
-                    ? this.getTableID(classTable)
-                    : this.newTableID()
-
-                const name = `${baseName}_Instance`
-                const tableInfo = this.getTableInfo(tableId)
-                if (tableInfo.className) {
-                    // already has a class
-                    return [parameters, parameterTypes, returnTypes]
-                }
-
-                tableInfo.className = name
-                scope.items.push({
-                    type: 'partial',
-                    classInfo: {
-                        name,
-                        tableId,
-                        definingModule: this.currentModule,
-                        base: baseClass ? `${baseClass}_Instance` : undefined,
-                        generated: true,
-                    },
-                })
-
-                if (!classTable) {
-                    // to identify the table when it's being defined
-                    scope.classTableId = tableId
-                }
-
-                // mark the instance in the base class
-                const resolvedBaseTypes = [
-                    ...this.resolveTypes({
-                        expression: base,
-                    }),
-                ]
-
-                const resolvedBase =
-                    resolvedBaseTypes.length === 1
-                        ? resolvedBaseTypes[0]
-                        : undefined
-
-                if (resolvedBase?.startsWith('@table')) {
-                    const baseTableInfo = this.getTableInfo(resolvedBase)
-                    if (baseTableInfo.className) {
-                        baseTableInfo.instanceName = name
-                        baseTableInfo.instanceId = tableId
-                    }
-                }
-
-                returnTypes.push(new Set([tableId]))
-            }
-
-            return [parameters, parameterTypes, returnTypes]
-        }
-
-        const selfId = scope.getLocalId('self') ?? scope.addSelfParameter()
-        parameters.push(selfId)
-
+        info: FunctionInfo,
+        identExpr: LuaMember,
+    ) {
         const identBase = identExpr.base
         if (identBase.type !== 'reference') {
-            return [parameters, parameterTypes, returnTypes]
+            return
         }
 
         const types = this.resolveTypes({ expression: identBase })
         if (types.size === 0) {
-            return [parameters, parameterTypes, returnTypes]
+            return
         }
 
-        parameterTypes.push(types)
+        info.parameterTypes.push(types)
 
         // assume Class:new(...) returns Class
         if (identExpr.member === 'new') {
-            returnTypes.push(types)
+            info.returnTypes.push(new Set(types))
+            info.isConstructor = true
 
             const tableId = [...types][0]
 
@@ -918,8 +817,6 @@ export class AnalysisContext {
                 }
             }
         }
-
-        return [parameters, parameterTypes, returnTypes]
     }
 
     protected checkClassTable(expr: LuaExpression): string | undefined {
@@ -955,6 +852,169 @@ export class AnalysisContext {
         }
 
         return rhs
+    }
+
+    protected checkClosureClass(
+        scope: LuaScope,
+        node: ast.FunctionDeclaration,
+        info: FunctionInfo,
+        identExpr: LuaMember,
+    ): boolean {
+        const memberName = identExpr.member
+        if (identExpr.indexer !== '.' && memberName === 'new') {
+            return false
+        }
+
+        const base = identExpr.base
+        if (base.type !== 'reference') {
+            return false
+        }
+
+        // setmetatable instances should be handled elsewhere
+        if (this.checkHasSetmetatableInstance(node)) {
+            return false
+        }
+
+        // all closure-based classes set a local `self` or `publ`
+        // this will be either a table or a call to the base class `.new`
+        let classTable: ast.TableConstructorExpression | undefined
+        let baseClass: string | undefined
+        let selfName = 'self'
+        for (const child of node.body) {
+            // local self/publ = ...
+            if (child.type !== 'LocalStatement') {
+                continue
+            }
+
+            const name = child.variables[0]?.name
+            if (name !== 'self' && name !== 'publ') {
+                continue
+            }
+
+            // local self/publ = {}
+            const init = child.init[0]
+            if (init.type === 'TableConstructorExpression') {
+                classTable = init
+                selfName = name
+                break
+            }
+
+            // no closure-based classes are defined as local publ = X.new(...)
+            if (name === 'publ') {
+                continue
+            }
+
+            // local self = X.new()
+            const base = init.type === 'CallExpression' ? init.base : undefined
+
+            if (base?.type !== 'MemberExpression') {
+                continue
+            }
+
+            if (base.identifier.name !== 'new') {
+                continue
+            }
+
+            const memberBase = base.base
+            if (memberBase.type !== 'Identifier') {
+                continue
+            }
+
+            selfName = name
+            baseClass = memberBase.name
+            break
+        }
+
+        if (!baseClass && !classTable) {
+            return false
+        }
+
+        // require at least one `self.X` function to identify it as a closure-based class
+        const foundFunction = node.body.find((child) => {
+            if (child.type !== 'FunctionDeclaration') {
+                return
+            }
+
+            if (child.identifier?.type !== 'MemberExpression') {
+                return
+            }
+
+            const base = child.identifier.base
+            if (base.type !== 'Identifier') {
+                return
+            }
+
+            return base.name === selfName
+        })
+
+        if (!foundFunction) {
+            return false
+        }
+
+        const tableId = classTable
+            ? this.getTableID(classTable)
+            : this.newTableID()
+
+        const tableInfo = this.getTableInfo(tableId)
+        if (tableInfo.className) {
+            // already has a class
+            return false
+        }
+
+        let baseName: string
+        if (memberName === 'new' || memberName === 'getInstance') {
+            baseName = scope.localIdToName(base.id) ?? base.id
+        } else {
+            const lastSlash = this.currentModule.lastIndexOf('/')
+            baseName = this.currentModule.slice(lastSlash + 1)
+        }
+
+        const name = `${baseName}_Instance`
+
+        tableInfo.className = name
+        tableInfo.isClosureClass = true
+        scope.items.push({
+            type: 'partial',
+            classInfo: {
+                name,
+                tableId,
+                definingModule: this.currentModule,
+                base: baseClass ? `${baseClass}_Instance` : undefined,
+                generated: true,
+            },
+        })
+
+        scope.classSelfName = selfName
+        if (!classTable) {
+            // to identify the table when it's being defined
+            scope.classTableId = tableId
+        }
+
+        // mark the instance in the base class
+        const resolvedBaseTypes = [
+            ...this.resolveTypes({
+                expression: base,
+            }),
+        ]
+
+        const resolvedBase =
+            resolvedBaseTypes.length === 1 ? resolvedBaseTypes[0] : undefined
+
+        if (resolvedBase?.startsWith('@table')) {
+            const baseTableInfo = this.getTableInfo(resolvedBase)
+            if (baseTableInfo.className) {
+                baseTableInfo.instanceName = name
+                baseTableInfo.instanceId = tableId
+            }
+        }
+
+        if (identExpr.indexer === ':') {
+            info.parameterTypes.push(this.resolveTypes({ expression: base }))
+        }
+
+        info.returnTypes.push(new Set([tableId]))
+        info.isConstructor = true
+        return true
     }
 
     protected checkDeriveCall(
@@ -1162,16 +1222,7 @@ export class AnalysisContext {
                 }
 
                 const func = this.finalizeFunction(id, name)
-                if (name === 'new') {
-                    let ret = func.returnTypes[0]
-                    if (!ret) {
-                        ret = new Set()
-                        func.returnTypes[0] = ret
-                    }
-
-                    ret.clear()
-                    ret.add(info.instanceName ?? cls.name)
-
+                if (func.isConstructor) {
                     const target =
                         indexer === ':' ? constructors : functionConstructors
 
@@ -1455,11 +1506,11 @@ export class AnalysisContext {
 
         const parameters: AnalyzedParameter[] = []
         for (let i = 0; i < info.parameters.length; i++) {
-            const name = info.parameterNames[i]
             if (isMethod && i === 0) {
                 continue
             }
 
+            const name = info.parameterNames[i]
             const paramTypes = info.parameterTypes[i] ?? new Set()
             const types = this.finalizeTypes(paramTypes)
 
@@ -1469,25 +1520,31 @@ export class AnalysisContext {
             })
         }
 
-        const returns: Set<string>[] = []
-        for (let i = 0; i < info.returnTypes.length; i++) {
-            const expressions = info.returnExpressions[i] ?? []
+        const returns: Set<string>[] = info.isConstructor
+            ? info.returnTypes.map((x) => this.finalizeTypes(x))
+            : []
 
-            const types = new Set<string>()
-            for (const expr of expressions) {
-                this.resolveTypes({ expression: expr }).forEach((x) =>
-                    types.add(x),
-                )
+        if (!info.isConstructor) {
+            for (let i = 0; i < info.returnTypes.length; i++) {
+                const expressions = info.returnExpressions[i] ?? []
+
+                const types = new Set<string>()
+                for (const expr of expressions) {
+                    this.resolveTypes({ expression: expr }).forEach((x) =>
+                        types.add(x),
+                    )
+                }
+
+                info.returnTypes[i].forEach((x) => types.add(x))
+                returns.push(this.finalizeTypes(types))
             }
-
-            info.returnTypes[i].forEach((x) => types.add(x))
-            returns.push(this.finalizeTypes(types))
         }
 
         return {
             name,
             parameters,
             returnTypes: returns,
+            isConstructor: info.isConstructor || name === 'new',
         }
     }
 
@@ -2159,27 +2216,12 @@ export class AnalysisContext {
                 }
 
                 // handle constructors
-                if (
-                    func.type === 'member' &&
-                    func.member === 'new' &&
-                    func.base.type === 'reference'
-                ) {
-                    const resolvedBaseTypes = this.resolveTypes({
-                        expression: func.base,
-                    })
-
-                    const base = [...resolvedBaseTypes][0]
-                    if (
-                        resolvedBaseTypes.size === 1 &&
-                        base.startsWith('@table')
-                    ) {
-                        const info = this.getTableInfo(base)
-                        types.add(info.instanceId ?? base)
-                        break
-                    }
+                const funcInfo = this.getFunctionInfo(resolvedFunc)
+                if (funcInfo.isConstructor) {
+                    funcInfo.returnTypes[0]?.forEach((x) => types.add(x))
+                    break
                 }
 
-                const funcInfo = this.getFunctionInfo(resolvedFunc)
                 const returns = funcInfo.returnTypes[index - 1]
                 if (!returns) {
                     types.add('nil')
@@ -2471,12 +2513,13 @@ export class AnalysisContext {
         lhs: LuaReference,
         rhs: LuaExpression,
     ): string | undefined {
+        // edge case: closure-based classes
         if (scope.type === 'function') {
-            // TODO: what is this for?
-            if (scope.localIdToName(lhs.id) !== 'self') {
+            if (scope.localIdToName(lhs.id) !== scope.classSelfName) {
                 return
             }
 
+            // self = {} | Base.new() → use the generated table
             return scope.classTableId
         }
 

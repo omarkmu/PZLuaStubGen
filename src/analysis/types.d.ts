@@ -261,6 +261,8 @@ export interface FunctionInfo {
      * This is used to make return values nullable.
      */
     minReturns?: number
+
+    isConstructor?: boolean
 }
 
 export interface TableInfo {
@@ -315,6 +317,11 @@ export interface TableInfo {
      * Flag for a table belonging to an overwritten class.
      */
     isEmptyClass?: boolean
+
+    /**
+     * Flag for a table belonging to a closure-based class.
+     */
+    isClosureClass?: boolean
 }
 
 export {
