@@ -807,12 +807,16 @@ export class AnalysisContext {
                 const tableInfo = this.getTableInfo(tableId)
                 if (!tableInfo.className && !tableInfo.fromHiddenClass) {
                     const baseId = identBase.id
-                    const name = scope.localIdToName(baseId) ?? baseId
+                    const localName = scope.localIdToName(baseId)
+                    const name = localName ?? baseId
+
+                    tableInfo.className = name
                     scope.items.push({
                         type: 'partial',
                         classInfo: {
                             name,
                             tableId,
+                            generated: localName !== undefined,
                             definingModule: this.currentModule,
                         },
                     })
@@ -1302,6 +1306,10 @@ export class AnalysisContext {
                         }
                     }
 
+                    if (expression && this.isLiteralClassTable(expression)) {
+                        expression = undefined
+                    }
+
                     if (expression) {
                         expression = this.finalizeExpression(expression, refs)
                     }
@@ -1338,9 +1346,14 @@ export class AnalysisContext {
         let value: LuaExpression | undefined
 
         let includeTypes = true
-        if (defs.length === 1 && !defs[0].functionLevel) {
-            // one def → rewrite unless defined in a function
-            value = this.finalizeExpression(defs[0].expression, refs, seen)
+        const firstExpr = defs[0]
+        if (
+            defs.length === 1 &&
+            !firstExpr.functionLevel &&
+            !this.isLiteralClassTable(firstExpr.expression)
+        ) {
+            // one def → rewrite unless it's a class reference or defined in a function
+            value = this.finalizeExpression(firstExpr.expression, refs, seen)
             includeTypes = false
         } else {
             // defined in literal → rewrite, but include types
@@ -1956,6 +1969,20 @@ export class AnalysisContext {
         }
 
         return true
+    }
+
+    protected isLiteralClassTable(expr: LuaExpression) {
+        if (expr.type !== 'literal' || expr.luaType !== 'table') {
+            return
+        }
+
+        const id = expr.tableId
+        if (!id) {
+            return
+        }
+
+        const info = this.getTableInfo(id)
+        return info.className !== undefined
     }
 
     /**
