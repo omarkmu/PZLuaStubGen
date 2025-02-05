@@ -28,12 +28,14 @@ const PREAMBLE = '---@meta\n'
 export class Annotator extends BaseReporter {
     protected outDirectory: string
     protected rosetta: Rosetta
+    protected alphabetize: boolean
 
     constructor(args: AnnotateArgs) {
         super(args)
 
         this.outDirectory = path.normalize(args.outputDirectory)
         this.rosetta = new Rosetta(args.rosetta)
+        this.alphabetize = args.alphabetize
 
         try {
             if (fs.existsSync(args.rosetta)) {
@@ -406,9 +408,9 @@ export class Annotator extends BaseReporter {
                 out.push(` : ${base}`)
             }
 
-            const sortedFields = [...cls.fields].sort((a, b) =>
-                a.name.localeCompare(b.name),
-            )
+            const sortedFields = this.alphabetize
+                ? [...cls.fields].sort((a, b) => a.name.localeCompare(b.name))
+                : cls.fields
 
             // fields
             const writtenFields = new Set<string>()
@@ -566,9 +568,9 @@ export class Annotator extends BaseReporter {
             out.push('\n')
         }
 
-        const sortedFunctions = functions.sort((a, b) =>
-            a.name.localeCompare(b.name),
-        )
+        const sortedFunctions = this.alphabetize
+            ? functions.sort((a, b) => a.name.localeCompare(b.name))
+            : functions
 
         const isMethod = indexer === ':'
         for (const func of sortedFunctions) {

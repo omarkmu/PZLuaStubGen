@@ -57,6 +57,11 @@ const annotateCommand = (yargs: yargs.Argv) => {
                 required: true,
                 desc: 'The directory for output stubs',
             })
+            .option('alphabetize', {
+                type: 'boolean',
+                default: true,
+                desc: 'Whether fields and functions should be alphabetically sorted',
+            })
             .option('rosetta', {
                 type: 'string',
                 default: 'assets/rosetta',
@@ -100,6 +105,7 @@ yargs(hideBin(process.argv))
         (async (args: ResolveArgs) =>
             await new Resolver(args).generateReport()) as any,
     )
+    .strict()
     .demandCommand()
     .parseAsync()
     .catch((e) => console.error(e))

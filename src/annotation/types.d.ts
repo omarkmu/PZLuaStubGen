@@ -13,4 +13,9 @@ export interface AnnotateArgs extends BaseReportArgs {
      * The directory to load rosetta files from.
      */
     rosetta: string
+
+    /**
+     * Whether fields and functions in the generated stubs should be alphabetized.
+     */
+    alphabetize: boolean
 }
