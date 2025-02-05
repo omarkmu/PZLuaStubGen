@@ -1782,8 +1782,15 @@ export class AnalysisContext {
         }
 
         const refCount = new Map<string, number>()
+        const seen = new Set<LuaExpression>()
         while (stack.length > 0) {
             const [expression, defaultRefs] = stack.pop()!
+
+            if (seen.has(expression)) {
+                continue
+            }
+
+            seen.add(expression)
 
             switch (expression.type) {
                 case 'reference':
@@ -1796,6 +1803,7 @@ export class AnalysisContext {
                     refCount.set(id, count + 1)
 
                     const resolvedTypes = this.resolveTypes({ expression })
+
                     for (const resolved of resolvedTypes) {
                         if (!resolved.startsWith('@table')) {
                             continue
