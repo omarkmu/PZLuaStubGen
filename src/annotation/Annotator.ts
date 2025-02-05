@@ -29,6 +29,8 @@ export class Annotator extends BaseReporter {
     protected outDirectory: string
     protected rosetta: Rosetta
     protected alphabetize: boolean
+    protected exclude: Set<string>
+    protected excludeFields: Set<string>
 
     constructor(args: AnnotateArgs) {
         super(args)
@@ -36,6 +38,25 @@ export class Annotator extends BaseReporter {
         this.outDirectory = path.normalize(args.outputDirectory)
         this.rosetta = new Rosetta(args.rosetta)
         this.alphabetize = args.alphabetize
+        this.exclude = new Set(args.exclude)
+
+        const excludeFields = args.excludeFields ?? []
+        if (args.excludeKnownDefs) {
+            excludeFields.push(
+                ...[
+                    'RecMedia',
+                    'Distributions',
+                    'ProceduralDistributions',
+                    'VehicleDistributions',
+                    'SuburbsDistributions',
+                    'ClutterTables',
+                    'BagsAndContainers',
+                    'SpecialLootSpawns',
+                ],
+            )
+        }
+
+        this.excludeFields = new Set(excludeFields)
 
         try {
             if (fs.existsSync(args.rosetta)) {
@@ -383,7 +404,14 @@ export class Annotator extends BaseReporter {
     }
 
     protected writeClasses(mod: AnalyzedModule, out: string[]): boolean {
+        let writtenCount = 0
         for (const cls of mod.classes) {
+            if (this.exclude.has(cls.name)) {
+                continue
+            }
+
+            writtenCount++
+            const excludeFields = this.excludeFields.has(cls.name)
             const rosettaClass: RosettaLuaClass | undefined =
                 this.rosetta.luaClasses[cls.name]
 
@@ -413,28 +441,31 @@ export class Annotator extends BaseReporter {
                 : cls.fields
 
             // fields
+
             const writtenFields = new Set<string>()
-            for (const field of sortedFields) {
-                const rosettaField = rosettaClass?.fields?.[field.name]
+            if (!excludeFields) {
+                for (const field of sortedFields) {
+                    const rosettaField = rosettaClass?.fields?.[field.name]
 
-                const fieldName = rosettaField?.name ?? field.name
-                writtenFields.add(fieldName)
+                    const fieldName = rosettaField?.name ?? field.name
+                    writtenFields.add(fieldName)
 
-                let typeString: string
-                let notes: string
-                if (rosettaField) {
-                    typeString = rosettaField.type?.trim() ?? 'any'
-                    notes = rosettaField.notes?.trim() ?? ''
-                } else {
-                    typeString = this.getTypeString(field.types)
-                    notes = ''
+                    let typeString: string
+                    let notes: string
+                    if (rosettaField) {
+                        typeString = rosettaField.type?.trim() ?? 'any'
+                        notes = rosettaField.notes?.trim() ?? ''
+                    } else {
+                        typeString = this.getTypeString(field.types)
+                        notes = ''
+                    }
+
+                    if (notes) {
+                        notes = ' ' + notes
+                    }
+
+                    out.push(`\n---@field ${fieldName} ${typeString}${notes}`)
                 }
-
-                if (notes) {
-                    notes = ' ' + notes
-                }
-
-                out.push(`\n---@field ${fieldName} ${typeString}${notes}`)
             }
 
             // definition
@@ -449,7 +480,7 @@ export class Annotator extends BaseReporter {
 
             if (cls.deriveName && base) {
                 out.push(`${base}:derive("${cls.deriveName}")`)
-            } else if (cls.literalFields.length > 0) {
+            } else if (!excludeFields && cls.literalFields.length > 0) {
                 out.push('{')
 
                 this.writeTableFields(
@@ -465,7 +496,7 @@ export class Annotator extends BaseReporter {
             }
 
             // inject static `Type` field for derived classes
-            if (cls.deriveName) {
+            if (cls.deriveName && !excludeFields) {
                 const rosettaField = rosettaClass?.values.Type
 
                 // skip if rosetta `Type` field is defined
@@ -475,51 +506,53 @@ export class Annotator extends BaseReporter {
             }
 
             // static fields
-            for (const field of cls.staticFields) {
-                const rosettaField = rosettaClass?.values?.[field.name]
-                const fieldName = rosettaField?.name ?? field.name
+            if (!excludeFields) {
+                for (const field of cls.staticFields) {
+                    const rosettaField = rosettaClass?.values?.[field.name]
+                    const fieldName = rosettaField?.name ?? field.name
 
-                if (writtenFields.has(fieldName)) {
-                    continue
-                }
-
-                let typeString: string | undefined
-                if (rosettaField) {
-                    typeString = rosettaField.type?.trim()
-
-                    const notes = rosettaField.notes?.trim()
-                    if (notes) {
-                        out.push('\n')
-                        out.push(`\n---${notes}`)
+                    if (writtenFields.has(fieldName)) {
+                        continue
                     }
-                } else if (field.expression) {
-                    const prefix = this.getFunctionPrefixFromExpr(
-                        field.expression,
-                    )
 
-                    if (prefix) {
-                        out.push('\n')
-                        out.push(prefix)
+                    let typeString: string | undefined
+                    if (rosettaField) {
+                        typeString = rosettaField.type?.trim()
+
+                        const notes = rosettaField.notes?.trim()
+                        if (notes) {
+                            out.push('\n')
+                            out.push(`\n---${notes}`)
+                        }
+                    } else if (field.expression) {
+                        const prefix = this.getFunctionPrefixFromExpr(
+                            field.expression,
+                        )
+
+                        if (prefix) {
+                            out.push('\n')
+                            out.push(prefix)
+                        }
+                    } else {
+                        typeString = this.getTypeString(field.types)
                     }
-                } else {
-                    typeString = this.getTypeString(field.types)
-                }
 
-                out.push('\n')
-                out.push(name)
+                    out.push('\n')
+                    out.push(name)
 
-                if (!fieldName.startsWith('[')) {
-                    out.push('.')
-                }
+                    if (!fieldName.startsWith('[')) {
+                        out.push('.')
+                    }
 
-                const exprString = field.expression
-                    ? this.getExpressionString(field.expression)
-                    : 'nil'
+                    const exprString = field.expression
+                        ? this.getExpressionString(field.expression)
+                        : 'nil'
 
-                out.push(`${fieldName} = ${exprString}`)
+                    out.push(`${fieldName} = ${exprString}`)
 
-                if (typeString) {
-                    out.push(` ---@type ${typeString}`)
+                    if (typeString) {
+                        out.push(` ---@type ${typeString}`)
+                    }
                 }
             }
 
@@ -554,7 +587,7 @@ export class Annotator extends BaseReporter {
             )
         }
 
-        return mod.classes.length > 0
+        return writtenCount > 0
     }
 
     protected writeClassFunctions(

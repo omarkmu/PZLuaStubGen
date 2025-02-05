@@ -66,6 +66,22 @@ const annotateCommand = (yargs: yargs.Argv) => {
                 type: 'string',
                 default: 'assets/rosetta',
                 desc: 'The directory to use for rosetta files',
+            })
+            .option('exclude', {
+                type: 'array',
+                alias: 'e',
+                string: true,
+                desc: 'Classes to exclude from annotations',
+            })
+            .option('exclude-fields', {
+                type: 'array',
+                string: true,
+                desc: 'Classes to include without fields',
+            })
+            .option('exclude-known-defs', {
+                type: 'boolean',
+                default: true,
+                desc: 'Whether known definition classes should be included without fields',
             }),
     )
 }

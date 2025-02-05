@@ -18,4 +18,19 @@ export interface AnnotateArgs extends BaseReportArgs {
      * Whether fields and functions in the generated stubs should be alphabetized.
      */
     alphabetize: boolean
+
+    /**
+     * Classes which should be excluded from the generated stubs.
+     */
+    exclude?: string[]
+
+    /**
+     * Classes whose fields should be excluded from the generated stubs.
+     */
+    excludeFields?: string[]
+
+    /**
+     * Whether known large definition classes should have their fields excluded.
+     */
+    excludeKnownDefs: boolean
 }
