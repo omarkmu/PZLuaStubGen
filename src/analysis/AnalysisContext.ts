@@ -819,12 +819,8 @@ export class AnalysisContext {
         info: FunctionInfo,
         identExpr: LuaMember,
     ) {
-        const identBase = identExpr.base
-        if (identBase.type !== 'reference') {
-            return
-        }
-
-        const types = this.resolveTypes({ expression: identBase })
+        const base = identExpr.base
+        const types = this.resolveTypes({ expression: base })
         if (types.size !== 1) {
             return
         }
@@ -847,9 +843,24 @@ export class AnalysisContext {
 
             // `:new` method without class → create class
             if (!tableInfo.className && !tableInfo.fromHiddenClass) {
-                const baseId = identBase.id
-                const localName = scope.localIdToName(baseId)
-                const name = localName ?? baseId
+                let name: string | undefined
+                let generated = false
+                switch (base.type) {
+                    case 'reference':
+                        const localName = scope.localIdToName(base.id)
+                        name = localName ?? base.id
+                        generated = localName !== undefined
+                        break
+
+                    case 'member':
+                        name = this.getFieldClassName(scope, base)
+                        generated = true
+                        break
+                }
+
+                if (!name) {
+                    return
+                }
 
                 tableInfo.className = name
                 scope.items.push({
@@ -857,7 +868,7 @@ export class AnalysisContext {
                     classInfo: {
                         name,
                         tableId,
-                        generated: localName !== undefined,
+                        generated,
                         definingModule: this.currentModule,
                     },
                 })
@@ -1777,6 +1788,25 @@ export class AnalysisContext {
         }
 
         return finalizedTypes
+    }
+
+    protected getFieldClassName(scope: LuaScope, expr: LuaMember) {
+        const names: string[] = [expr.member]
+
+        while (expr.type === 'member') {
+            const parent = expr.base
+            if (parent.type === 'reference') {
+                names.push(scope.localIdToName(parent.id) ?? parent.id)
+                break
+            } else if (parent.type !== 'member') {
+                return
+            }
+
+            names.push(parent.member)
+            expr = parent
+        }
+
+        return names.reverse().join('_')
     }
 
     /**
