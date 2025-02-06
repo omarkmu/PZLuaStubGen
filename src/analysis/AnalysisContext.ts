@@ -246,6 +246,7 @@ export class AnalysisContext {
                     expression = {
                         type: 'literal',
                         luaType: 'function',
+                        isMethod: info.isMethod,
                         parameters: info.parameters,
                         returnTypes: info.returnTypes,
                     }
@@ -1511,6 +1512,7 @@ export class AnalysisContext {
                     return {
                         type: 'literal',
                         luaType: 'function',
+                        isMethod: info.isMethod,
                         parameters: info.parameters,
                         returnTypes: info.returnTypes,
                     }
@@ -1597,6 +1599,7 @@ export class AnalysisContext {
             name,
             parameters,
             returnTypes: returns,
+            isMethod,
             isConstructor: info.isConstructor || name === 'new',
         }
     }

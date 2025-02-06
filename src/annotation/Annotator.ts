@@ -257,10 +257,12 @@ export class Annotator extends BaseReporter {
                 return expression.literal ?? 'false'
 
             case 'function':
-                return this.getFunctionString(
-                    undefined,
-                    expression.parameters ?? [],
-                )
+                const params = [...(expression.parameters ?? [])]
+                if (expression.isMethod) {
+                    params.unshift({ name: 'self', types: new Set() })
+                }
+
+                return this.getFunctionString(undefined, params)
 
             case 'table':
                 return this.getTableString(expression, depth) ?? '{}'

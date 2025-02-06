@@ -59,6 +59,8 @@ export interface AnyLiteralInfo extends SharedLiteralInfo {
      */
     tableId?: string
 
+    isMethod?: boolean
+
     parameters?: AnalyzedParameter[]
 
     returnTypes?: Set<string>[]
@@ -204,6 +206,7 @@ export interface AnalyzedFunction {
     name: string
     parameters: AnalyzedParameter[]
     returnTypes: Set<string>[]
+    isMethod: boolean
     isConstructor: boolean
 }
 
