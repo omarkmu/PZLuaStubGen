@@ -160,7 +160,7 @@ export interface UsageItem extends BaseAnalysisItem {
 export interface ResolvedClassInfo {
     name: string
     tableId: string
-    definingModule: string
+    definingModule?: string
     base?: string
     deriveName?: string
     generated?: boolean
@@ -190,6 +190,8 @@ export interface ResolvedScopeItem extends BaseAnalysisItem {
     returns: ResolvedReturnInfo[]
 
     requires: ResolvedRequireInfo[]
+
+    seenClasses: Set<string>
 }
 
 export interface ResolvedModule extends ResolvedScopeItem {
@@ -198,6 +200,8 @@ export interface ResolvedModule extends ResolvedScopeItem {
 
 export interface PartialItem extends BaseAnalysisItem {
     type: 'partial'
+
+    seenClassId?: string
 
     classInfo?: ResolvedClassInfo
 

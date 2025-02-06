@@ -332,6 +332,7 @@ export class AnalysisContext {
         const classes: ResolvedClassInfo[] = []
         const functions: ResolvedFunctionInfo[] = []
         const requires: ResolvedRequireInfo[] = []
+        const seenClasses = new Set<string>()
 
         for (const item of scope.items) {
             switch (item.type) {
@@ -349,6 +350,10 @@ export class AnalysisContext {
 
                     if (item.requireInfo) {
                         requires.push(item.requireInfo)
+                    }
+
+                    if (item.seenClassId) {
+                        seenClasses.add(item.seenClassId)
                     }
 
                     break
@@ -413,6 +418,27 @@ export class AnalysisContext {
             },
         )
 
+        if (scope.type === 'module') {
+            const declaredClasses = new Set<string>()
+            classes.forEach((x) => declaredClasses.add(x.tableId))
+
+            for (const id of seenClasses) {
+                if (declaredClasses.has(id)) {
+                    continue
+                }
+
+                const info = this.getTableInfo(id)
+                if (!info.className || info.isEmptyClass) {
+                    continue
+                }
+
+                classes.push({
+                    name: info.className,
+                    tableId: info.id,
+                })
+            }
+        }
+
         return {
             type: 'resolved',
             id: scope.id,
@@ -420,6 +446,7 @@ export class AnalysisContext {
             functions,
             returns,
             requires,
+            seenClasses,
         }
     }
 
@@ -680,6 +707,14 @@ export class AnalysisContext {
                 expression.luaType !== 'function'
         }
 
+        // include classes not declared in this module, but with fields set
+        if (info.className) {
+            scope.items.push({
+                type: 'partial',
+                seenClassId: id,
+            })
+        }
+
         let fieldDefs = info.definitions.get(field)
         if (!fieldDefs) {
             fieldDefs = []
@@ -789,9 +824,14 @@ export class AnalysisContext {
         }
 
         const types = this.resolveTypes({ expression: identBase })
-        if (types.size === 0) {
+        if (types.size !== 1) {
             return
         }
+
+        const tableId = [...types][0]
+        const tableInfo = tableId.startsWith('@table')
+            ? this.getTableInfo(tableId)
+            : undefined
 
         info.parameterTypes.push(types)
 
@@ -800,27 +840,26 @@ export class AnalysisContext {
             info.returnTypes.push(new Set(types))
             info.isConstructor = true
 
-            const tableId = [...types][0]
+            if (!tableInfo) {
+                return
+            }
 
             // `:new` method without class → create class
-            if (tableId.startsWith('@table')) {
-                const tableInfo = this.getTableInfo(tableId)
-                if (!tableInfo.className && !tableInfo.fromHiddenClass) {
-                    const baseId = identBase.id
-                    const localName = scope.localIdToName(baseId)
-                    const name = localName ?? baseId
+            if (!tableInfo.className && !tableInfo.fromHiddenClass) {
+                const baseId = identBase.id
+                const localName = scope.localIdToName(baseId)
+                const name = localName ?? baseId
 
-                    tableInfo.className = name
-                    scope.items.push({
-                        type: 'partial',
-                        classInfo: {
-                            name,
-                            tableId,
-                            generated: localName !== undefined,
-                            definingModule: this.currentModule,
-                        },
-                    })
-                }
+                tableInfo.className = name
+                scope.items.push({
+                    type: 'partial',
+                    classInfo: {
+                        name,
+                        tableId,
+                        generated: localName !== undefined,
+                        definingModule: this.currentModule,
+                    },
+                })
             }
         }
     }
