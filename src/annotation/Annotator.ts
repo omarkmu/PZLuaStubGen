@@ -417,7 +417,6 @@ export class Annotator extends BaseReporter {
             const rosettaClass: RosettaLuaClass | undefined =
                 this.rosetta.luaClasses[cls.name]
 
-            const name = rosettaClass?.name ?? cls.name
             const base = rosettaClass?.extendz ?? cls.extends
 
             // class annotation
@@ -433,7 +432,7 @@ export class Annotator extends BaseReporter {
                 out.push(`\n---${rosettaClass.notes}`)
             }
 
-            out.push(`\n---@class ${name}`)
+            out.push(`\n---@class ${cls.name}`)
             if (base) {
                 out.push(` : ${base}`)
             }
@@ -449,8 +448,7 @@ export class Annotator extends BaseReporter {
                 for (const field of sortedFields) {
                     const rosettaField = rosettaClass?.fields?.[field.name]
 
-                    const fieldName = rosettaField?.name ?? field.name
-                    writtenFields.add(fieldName)
+                    writtenFields.add(field.name)
 
                     let typeString: string
                     let notes: string
@@ -466,7 +464,7 @@ export class Annotator extends BaseReporter {
                         notes = ' ' + notes
                     }
 
-                    out.push(`\n---@field ${fieldName} ${typeString}${notes}`)
+                    out.push(`\n---@field ${field.name} ${typeString}${notes}`)
                 }
             }
 
@@ -478,7 +476,7 @@ export class Annotator extends BaseReporter {
                 out.push('local ')
             }
 
-            out.push(`${name} = `)
+            out.push(`${cls.name} = `)
 
             if (cls.deriveName && base) {
                 out.push(`${base}:derive("${cls.deriveName}")`)
@@ -503,7 +501,7 @@ export class Annotator extends BaseReporter {
 
                 // skip if rosetta `Type` field is defined
                 if (!rosettaField) {
-                    out.push(`\n${name}.Type = "${cls.deriveName}"`)
+                    out.push(`\n${cls.name}.Type = "${cls.deriveName}"`)
                 }
             }
 
@@ -511,9 +509,8 @@ export class Annotator extends BaseReporter {
             if (!excludeFields) {
                 for (const field of cls.staticFields) {
                     const rosettaField = rosettaClass?.values?.[field.name]
-                    const fieldName = rosettaField?.name ?? field.name
 
-                    if (writtenFields.has(fieldName)) {
+                    if (writtenFields.has(field.name)) {
                         continue
                     }
 
@@ -540,9 +537,9 @@ export class Annotator extends BaseReporter {
                     }
 
                     out.push('\n')
-                    out.push(name)
+                    out.push(cls.name)
 
-                    if (!fieldName.startsWith('[')) {
+                    if (!field.name.startsWith('[')) {
                         out.push('.')
                     }
 
@@ -550,7 +547,7 @@ export class Annotator extends BaseReporter {
                         ? this.getExpressionString(field.expression)
                         : 'nil'
 
-                    out.push(`${fieldName} = ${exprString}`)
+                    out.push(`${field.name} = ${exprString}`)
 
                     if (typeString) {
                         out.push(` ---@type ${typeString}`)
@@ -560,7 +557,7 @@ export class Annotator extends BaseReporter {
 
             // functions
             this.writeClassFunctions(
-                name,
+                cls.name,
                 cls.functions,
                 '.',
                 out,
@@ -568,11 +565,17 @@ export class Annotator extends BaseReporter {
             )
 
             // methods
-            this.writeClassFunctions(name, cls.methods, ':', out, rosettaClass)
+            this.writeClassFunctions(
+                cls.name,
+                cls.methods,
+                ':',
+                out,
+                rosettaClass,
+            )
 
             // function constructors
             this.writeClassFunctions(
-                name,
+                cls.name,
                 cls.functionConstructors,
                 '.',
                 out,
@@ -581,7 +584,7 @@ export class Annotator extends BaseReporter {
 
             // method constructors
             this.writeClassFunctions(
-                name,
+                cls.name,
                 cls.constructors,
                 ':',
                 out,
@@ -621,8 +624,6 @@ export class Annotator extends BaseReporter {
                 rosettaFunc = isMethod
                     ? rosettaClass.methods[func.name]
                     : rosettaClass.functions[func.name]
-
-                funcName = rosettaFunc?.name ?? funcName
             }
 
             const fullName = `${name}${indexer}${funcName}`
