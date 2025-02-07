@@ -206,8 +206,8 @@ export interface AnalyzedFunction {
     name: string
     parameters: AnalyzedParameter[]
     returnTypes: Set<string>[]
-    isMethod: boolean
-    isConstructor: boolean
+    isMethod?: boolean
+    isConstructor?: boolean
 }
 
 export interface AnalyzedField {
@@ -230,6 +230,7 @@ export interface AnalyzedClass {
     methods: AnalyzedFunction[]
     constructors: AnalyzedFunction[]
     functionConstructors: AnalyzedFunction[]
+    overloads: AnalyzedFunction[]
 }
 
 export interface AnalyzedReturn {

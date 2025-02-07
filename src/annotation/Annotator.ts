@@ -449,6 +449,30 @@ export class Annotator extends BaseReporter {
                 out.push(` : ${base}`)
             }
 
+            for (const overload of cls.overloads) {
+                out.push('\n---@overload fun(')
+
+                const params: string[] = []
+                for (const param of overload.parameters) {
+                    params.push(
+                        `${param.name}: ${this.getTypeString(param.types)}`,
+                    )
+                }
+
+                out.push(params.join())
+                out.push(')')
+
+                const returns: string[] = []
+                for (const ret of overload.returnTypes) {
+                    returns.push(this.getTypeString(ret))
+                }
+
+                if (returns.length > 0) {
+                    out.push(': ')
+                    out.push(returns.join())
+                }
+            }
+
             const sortedFields = this.alphabetize
                 ? [...cls.fields].sort((a, b) => a.name.localeCompare(b.name))
                 : cls.fields

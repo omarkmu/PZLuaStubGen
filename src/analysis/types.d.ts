@@ -331,6 +331,16 @@ export interface TableInfo {
      * Flag for a table belonging to a closure-based class.
      */
     isClosureClass?: boolean
+
+    /**
+     * Flag for a table belonging to an Atom UI class.
+     */
+    isAtomUI?: boolean
+
+    /**
+     * Flag for a table which is a base Atom UI class.
+     */
+    isAtomUIBase?: boolean
 }
 
 export {

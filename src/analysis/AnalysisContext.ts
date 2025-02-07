@@ -671,6 +671,58 @@ export class AnalysisContext {
         }
     }
 
+    protected addAtomUIClass(
+        scope: LuaScope,
+        name: string,
+        literalInfo: TableInfo,
+        base?: string,
+    ): TableInfo {
+        const tableId = this.newTableID()
+        const info = this.getTableInfo(tableId)
+        info.className = name
+        info.isAtomUI = true
+
+        for (const [field, defs] of literalInfo.definitions) {
+            info.definitions.set(field, defs)
+
+            if (defs.length !== 1) {
+                continue
+            }
+
+            // functions with self → methods
+            const def = defs[0]
+            const expr = def.expression
+            if (expr.type !== 'literal' || !expr.functionId) {
+                continue
+            }
+
+            const funcInfo = this.getFunctionInfo(expr.functionId)
+            if (funcInfo.parameterNames[0] !== 'self') {
+                continue
+            }
+
+            funcInfo.identifierExpression = {
+                type: 'member',
+                base: { type: 'reference', id: '@generated' },
+                member: LuaHelpers.getLuaFieldKey(field),
+                indexer: ':',
+            }
+        }
+
+        scope.items.push({
+            type: 'partial',
+            classInfo: {
+                name,
+                tableId,
+                base,
+                generated: true,
+                definingModule: this.currentModule,
+            },
+        })
+
+        return info
+    }
+
     protected addDefinition(
         scope: LuaScope,
         id: string,
@@ -714,32 +766,7 @@ export class AnalysisContext {
 
         // check for `:derive` calls in field setters
         if (lhs && rhs.type === 'operation') {
-            const [base, deriveName] = this.checkDeriveCall(rhs) ?? []
-            const name = base && this.getFieldClassName(scope, lhs)
-
-            if (base && name) {
-                const newId = this.newTableID()
-                const newInfo = this.getTableInfo(newId)
-                newInfo.className = name
-
-                scope.items.push({
-                    type: 'partial',
-                    classInfo: {
-                        name,
-                        tableId: newId,
-                        base,
-                        deriveName,
-                        generated: true,
-                        definingModule: this.currentModule,
-                    },
-                })
-
-                rhs = {
-                    type: 'literal',
-                    luaType: 'table',
-                    tableId: newId,
-                }
-            }
+            rhs = this.checkFieldCallAssign(scope, lhs, rhs)
         }
 
         const types = this.resolveTypes({ expression: rhs })
@@ -872,6 +899,116 @@ export class AnalysisContext {
         for (let i = item.arguments.length; i < parameterTypes.length; i++) {
             parameterTypes[i] ??= new Set()
             parameterTypes[i].add('nil')
+        }
+    }
+
+    protected checkBaseUINode(
+        scope: LuaScope,
+        lhs: LuaExpression,
+        rhs: LuaExpression,
+    ): LuaExpression | undefined {
+        const name = this.getFieldClassName(scope, lhs)
+        if (!name) {
+            return
+        }
+
+        if (rhs.type !== 'operation' || rhs.operator !== 'call') {
+            return
+        }
+
+        // A(X)
+        if (rhs.arguments.length !== 2) {
+            return
+        }
+
+        // A.B(X)
+        const callBase = rhs.arguments[0]
+        if (callBase.type !== 'member') {
+            return
+        }
+
+        // A.__call(X)
+        if (callBase.member !== '__call') {
+            return
+        }
+
+        // A.__call({ ... })
+        const callArg = rhs.arguments[1]
+        if (callArg.type !== 'literal' || !callArg.tableId) {
+            return
+        }
+
+        const argInfo = this.getTableInfo(callArg.tableId)
+        const atomField = argInfo.literalFields.find(
+            (x) => x.key.type === 'string' && x.key.name === '_ATOM_UI_CLASS',
+        )
+
+        // A.__call({ _ATOM_UI_CLASS = X, ... })
+        if (!atomField || atomField.value.type !== 'reference') {
+            return
+        }
+
+        const info = this.addAtomUIClass(scope, name, argInfo)
+        info.isAtomUIBase = true
+
+        return {
+            type: 'literal',
+            luaType: 'table',
+            tableId: info.id,
+        }
+    }
+
+    protected checkChildUINode(
+        scope: LuaScope,
+        lhs: LuaExpression,
+        rhs: LuaExpression,
+    ): LuaExpression | undefined {
+        const name = this.getFieldClassName(scope, lhs)
+        if (!name) {
+            return
+        }
+
+        if (rhs.type !== 'operation' || rhs.operator !== 'call') {
+            return
+        }
+
+        // A(X)
+        if (rhs.arguments.length !== 2) {
+            return
+        }
+
+        // A({ ... })
+        const callArg = rhs.arguments[1]
+        if (callArg.type !== 'literal' || !callArg.tableId) {
+            return
+        }
+
+        // TableRef({ ... })
+        const callBase = rhs.arguments[0]
+        const types = this.resolveTypes({ expression: callBase })
+        const argId = [...types][0]
+        if (types.size !== 1 || !argId.startsWith('@table')) {
+            return
+        }
+
+        // Node({ ... })
+        const baseInfo = this.getTableInfo(argId)
+        if (!baseInfo.isAtomUI) {
+            return
+        }
+
+        const argInfo = this.getTableInfo(callArg.tableId)
+        const info = this.addAtomUIClass(
+            scope,
+            name,
+            argInfo,
+            baseInfo.className,
+        )
+
+        return {
+            type: 'literal',
+            luaType: 'table',
+            tableId: info.id,
         }
     }
 
@@ -1179,6 +1316,53 @@ export class AnalysisContext {
         return [base.id, type]
     }
 
+    protected checkFieldCallAssign(
+        scope: LuaScope,
+        lhs: LuaExpression,
+        rhs: LuaExpression,
+    ): LuaExpression {
+        // check for `:derive` calls
+        const [base, deriveName] = this.checkDeriveCall(rhs) ?? []
+        const name = base && this.getFieldClassName(scope, lhs)
+        if (base && name) {
+            const newId = this.newTableID()
+            const newInfo = this.getTableInfo(newId)
+            newInfo.className = name
+
+            scope.items.push({
+                type: 'partial',
+                classInfo: {
+                    name,
+                    tableId: newId,
+                    base,
+                    deriveName,
+                    generated: true,
+                    definingModule: this.currentModule,
+                },
+            })
+
+            return {
+                type: 'literal',
+                luaType: 'table',
+                tableId: newId,
+            }
+        }
+
+        // check for base `UI.Node` initialization
+        const baseUiRhs = this.checkBaseUINode(scope, lhs, rhs)
+        if (baseUiRhs) {
+            return baseUiRhs
+        }
+
+        // check for child UI node initialization
+        const childUiRhs = this.checkChildUINode(scope, lhs, rhs)
+        if (childUiRhs) {
+            return childUiRhs
+        }
+
+        return rhs
+    }
+
     protected checkHasSetmetatableInstance(node: ast.FunctionDeclaration) {
         for (const child of node.body) {
             // check for a setmetatable call
@@ -1258,6 +1442,7 @@ export class AnalysisContext {
         const constructors: AnalyzedFunction[] = []
         const functionConstructors: AnalyzedFunction[] = []
         const setterFields: AnalyzedField[] = []
+        const overloads: AnalyzedFunction[] = []
 
         const literalKeys = new Set<string>()
 
@@ -1417,6 +1602,38 @@ export class AnalysisContext {
             }
         }
 
+        // inject base atom UI fields
+        if (info.isAtomUIBase) {
+            fields.push({
+                name: 'javaObj',
+                types: new Set(),
+            })
+
+            fields.push({
+                name: 'children',
+                types: new Set([`table<string, ${cls.name}>`, 'nil']),
+            })
+        }
+
+        // inject atom UI overloads & fields
+        if (info.isAtomUI) {
+            overloads.push({
+                name: 'overload',
+                parameters: [
+                    {
+                        name: 'args',
+                        types: new Set(['table']),
+                    },
+                ],
+                returnTypes: [new Set([cls.name])],
+            })
+
+            fields.push({
+                name: 'super',
+                types: new Set([cls.base ?? 'table']),
+            })
+        }
+
         // check for floating setters
         const seenIds = new Set<string>()
         while (checkSubfields.length > 0) {
@@ -1484,6 +1701,7 @@ export class AnalysisContext {
             methods,
             constructors,
             functionConstructors,
+            overloads,
         }
     }
 
