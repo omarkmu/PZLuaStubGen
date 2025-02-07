@@ -225,6 +225,7 @@ export interface AnalyzedClass {
     fields: AnalyzedField[]
     literalFields: TableField[]
     staticFields: AnalyzedField[]
+    setterFields: AnalyzedField[]
     functions: AnalyzedFunction[]
     methods: AnalyzedFunction[]
     constructors: AnalyzedFunction[]

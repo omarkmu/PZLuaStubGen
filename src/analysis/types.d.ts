@@ -293,6 +293,11 @@ export interface TableInfo {
     className?: string
 
     /**
+     * The ID of the class containing this table as a field.
+     */
+    containerId?: string
+
+    /**
      * The name for instances of the class assigned to this table.
      */
     instanceName?: string

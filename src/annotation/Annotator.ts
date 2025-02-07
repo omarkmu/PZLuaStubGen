@@ -518,7 +518,8 @@ export class Annotator extends BaseReporter {
 
             // static fields
             if (!excludeFields) {
-                for (const field of cls.staticFields) {
+                const statics = [...cls.staticFields, ...cls.setterFields]
+                for (const field of statics) {
                     const rosettaField = rosettaClass?.values?.[field.name]
 
                     if (writtenFields.has(field.name)) {

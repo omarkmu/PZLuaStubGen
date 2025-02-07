@@ -625,7 +625,11 @@ export class AnalysisContext {
     /**
      * Sets the fields used to define a table.
      */
-    setTableLiteralFields(tableId: string, fields: TableField[]) {
+    setTableLiteralFields(
+        scope: LuaScope,
+        tableId: string,
+        fields: TableField[],
+    ) {
         const info = this.getTableInfo(tableId)
         info.literalFields = fields
 
@@ -653,17 +657,15 @@ export class AnalysisContext {
                 continue
             }
 
-            let fieldDefs = info.definitions.get(literalKey)
-            if (!fieldDefs) {
-                fieldDefs = []
-                info.definitions.set(literalKey, fieldDefs)
-            }
-
-            fieldDefs.push({
-                expression: field.value,
-                definingModule: this.currentModule,
-                fromLiteral: true,
-            })
+            this.addField(
+                scope,
+                tableId,
+                literalKey,
+                field.value,
+                1,
+                false,
+                true,
+            )
         }
     }
 
@@ -694,6 +696,7 @@ export class AnalysisContext {
         expression: LuaExpression,
         index?: number,
         instance?: boolean,
+        fromLiteral?: boolean,
     ) {
         if (!id.startsWith('@table')) {
             return
@@ -708,11 +711,37 @@ export class AnalysisContext {
                 expression.luaType !== 'function'
         }
 
-        // include classes not declared in this module, but with fields set
+        const types = this.resolveTypes({ expression })
+        const tableId = types.size === 1 ? [...types][0] : undefined
+        const fieldInfo = tableId?.startsWith('@table')
+            ? this.getTableInfo(tableId)
+            : undefined
+
         if (info.className) {
+            // include non-declared classes with fields set
             scope.items.push({
                 type: 'partial',
                 seenClassId: id,
+            })
+
+            // mark the table as contained by the class
+            if (fieldInfo) {
+                fieldInfo.containerId ??= id
+            }
+        } else if (fieldInfo?.containerId) {
+            scope.items.push({
+                type: 'partial',
+                seenClassId: fieldInfo.containerId,
+            })
+        } else if (info.containerId) {
+            if (fieldInfo) {
+                // bubble up container IDs
+                fieldInfo.containerId = info.containerId
+            }
+
+            scope.items.push({
+                type: 'partial',
+                seenClassId: info.containerId,
             })
         }
 
@@ -726,6 +755,7 @@ export class AnalysisContext {
             expression,
             index,
             instance,
+            fromLiteral,
             definingModule: this.currentModule,
             functionLevel: !scope.id.startsWith('@module'),
         })
@@ -1196,6 +1226,7 @@ export class AnalysisContext {
         const functions: AnalyzedFunction[] = []
         const constructors: AnalyzedFunction[] = []
         const functionConstructors: AnalyzedFunction[] = []
+        const setterFields: AnalyzedField[] = []
 
         const literalKeys = new Set<string>()
 
@@ -1239,8 +1270,9 @@ export class AnalysisContext {
             }
         }
 
+        const checkSubfields: [string, string][] = []
         for (let [field, expressions] of info.definitions) {
-            expressions = expressions.filter((x) => {
+            const definingExprs = expressions.filter((x) => {
                 if (!x.definingModule) {
                     return isClassDefiner
                 }
@@ -1248,11 +1280,25 @@ export class AnalysisContext {
                 return x.definingModule === this.currentModule
             })
 
-            if (expressions.length === 0) {
+            if (definingExprs.length === 0) {
+                if (expressions.length !== 1) {
+                    continue
+                }
+
+                const expr = expressions[0].expression
+                if (expr.type !== 'literal' || !expr.tableId) {
+                    continue
+                }
+
+                checkSubfields.push([
+                    expr.tableId,
+                    LuaHelpers.getLuaFieldKey(field),
+                ])
+
                 continue
             }
 
-            const functionExpr = expressions.find((x) => {
+            const functionExpr = definingExprs.find((x) => {
                 return (
                     (cls.generated || !x.functionLevel) &&
                     !x.instance &&
@@ -1292,7 +1338,7 @@ export class AnalysisContext {
             }
 
             const name = LuaHelpers.getLuaFieldKey(field)
-            const instanceExprs = expressions.filter((x) => x.instance)
+            const instanceExprs = definingExprs.filter((x) => x.instance)
             if (instanceExprs.length > 0) {
                 const instanceTypes = new Set<string>()
 
@@ -1321,56 +1367,76 @@ export class AnalysisContext {
                 continue
             }
 
-            const staticExprs = expressions.filter((x) => !x.instance)
+            const staticExprs = definingExprs.filter((x) => !x.instance)
             if (staticExprs.length > 0) {
                 if (addedFunction || literalKeys.has(name)) {
                     continue
                 }
 
-                const staticTypes = new Set<string>()
-
-                for (const expr of staticExprs) {
-                    this.resolveTypes(expr).forEach((x) => staticTypes.add(x))
-                }
-
-                const moduleLevelDef = expressions.find((x) => !x.functionLevel)
-                if (!moduleLevelDef) {
-                    // no module-level def → assume optional
-                    staticTypes.add('nil')
-                }
-
-                let expression: LuaExpression | undefined
-                const types = this.finalizeTypes(staticTypes)
-
-                // only rewrite module-level definitions
-                if (moduleLevelDef) {
-                    if (staticExprs.length === 1) {
-                        expression = moduleLevelDef.expression
-                    } else if (types.size === 1) {
-                        switch ([...types][0]) {
-                            case 'nil':
-                            case 'boolean':
-                            case 'string':
-                            case 'number':
-                                expression = moduleLevelDef.expression
-                                break
-                        }
-                    }
-
-                    if (expression && this.isLiteralClassTable(expression)) {
-                        expression = undefined
-                    }
-
-                    if (expression) {
-                        expression = this.finalizeExpression(expression, refs)
-                    }
-                }
+                const [expression, types] = this.finalizeStaticField(
+                    staticExprs,
+                    refs,
+                )
 
                 staticFields.push({
                     name,
                     types,
                     expression,
                 })
+            }
+        }
+
+        // check for floating setters
+        const seenIds = new Set<string>()
+        while (checkSubfields.length > 0) {
+            const [id, baseName] = checkSubfields.pop()!
+            if (seenIds.has(id)) {
+                continue
+            }
+
+            seenIds.add(id)
+            const tableInfo = this.getTableInfo(id)
+
+            for (let [field, expressions] of tableInfo.definitions) {
+                let name = LuaHelpers.getLuaFieldKey(field)
+                if (baseName) {
+                    name = name.startsWith('[')
+                        ? `${baseName}${name}`
+                        : `${baseName}.${name}`
+                }
+
+                const definingExprs = expressions.filter((x) => {
+                    return (
+                        !x.instance && x.definingModule === this.currentModule
+                    )
+                })
+
+                if (definingExprs.length > 0) {
+                    const [expression, types] = this.finalizeStaticField(
+                        definingExprs,
+                        refs,
+                    )
+
+                    setterFields.push({
+                        name,
+                        types,
+                        expression,
+                    })
+
+                    continue
+                }
+
+                if (expressions.length !== 1) {
+                    continue
+                }
+
+                const expr = expressions[0].expression
+                if (expr.type !== 'literal' || !expr.tableId) {
+                    continue
+                }
+
+                checkSubfields.push([expr.tableId, name])
+                continue
             }
         }
 
@@ -1382,6 +1448,7 @@ export class AnalysisContext {
             fields,
             literalFields,
             staticFields,
+            setterFields,
             functions,
             methods,
             constructors,
@@ -1643,6 +1710,51 @@ export class AnalysisContext {
             types: this.finalizeTypes(types),
             expression,
         }
+    }
+
+    protected finalizeStaticField(
+        expressions: LuaExpressionInfo[],
+        refs: Map<string, number>,
+    ): [LuaExpression | undefined, Set<string>] {
+        const staticTypes = new Set<string>()
+        for (const expr of expressions) {
+            this.resolveTypes(expr).forEach((x) => staticTypes.add(x))
+        }
+
+        const moduleLevelDef = expressions.find((x) => !x.functionLevel)
+        if (!moduleLevelDef) {
+            // no module-level def → assume optional
+            staticTypes.add('nil')
+        }
+
+        let expression: LuaExpression | undefined
+        const types = this.finalizeTypes(staticTypes)
+
+        // only rewrite module-level definitions
+        if (moduleLevelDef) {
+            if (expressions.length === 1) {
+                expression = moduleLevelDef.expression
+            } else if (types.size === 1) {
+                switch ([...types][0]) {
+                    case 'nil':
+                    case 'boolean':
+                    case 'string':
+                    case 'number':
+                        expression = moduleLevelDef.expression
+                        break
+                }
+            }
+
+            if (expression && this.isLiteralClassTable(expression)) {
+                expression = undefined
+            }
+
+            if (expression) {
+                expression = this.finalizeExpression(expression, refs)
+            }
+        }
+
+        return [expression, types]
     }
 
     protected finalizeTable(

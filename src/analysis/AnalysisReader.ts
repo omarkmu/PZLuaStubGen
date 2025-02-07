@@ -490,7 +490,7 @@ export class AnalysisReader extends BaseReader {
             case 'TableConstructorExpression':
                 const tableId = this.context.getTableID(node)
                 const fields = this.analyzeTableFields(node, scope)
-                this.context.setTableLiteralFields(tableId, fields)
+                this.context.setTableLiteralFields(scope, tableId, fields)
 
                 return {
                     type: 'literal',
