@@ -1956,7 +1956,7 @@ export class AnalysisContext {
             expr = parent
         }
 
-        return names.reverse().join('_')
+        return names.reverse().join('.')
     }
 
     /**

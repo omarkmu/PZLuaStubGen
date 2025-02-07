@@ -428,6 +428,7 @@ export class Annotator extends BaseReporter {
             const rosettaClass: RosettaLuaClass | undefined =
                 this.rosetta.luaClasses[cls.name]
 
+            const identName = cls.name.replaceAll('.', '_')
             const base = rosettaClass?.extendz ?? cls.extends
 
             // class annotation
@@ -487,7 +488,7 @@ export class Annotator extends BaseReporter {
                 out.push('local ')
             }
 
-            out.push(`${cls.name} = `)
+            out.push(`${identName} = `)
 
             if (cls.deriveName && base) {
                 out.push(`${base}:derive("${cls.deriveName}")`)
@@ -512,7 +513,7 @@ export class Annotator extends BaseReporter {
 
                 // skip if rosetta `Type` field is defined
                 if (!rosettaField) {
-                    out.push(`\n${cls.name}.Type = "${cls.deriveName}"`)
+                    out.push(`\n${identName}.Type = "${cls.deriveName}"`)
                 }
             }
 
@@ -551,7 +552,7 @@ export class Annotator extends BaseReporter {
                     }
 
                     out.push('\n')
-                    out.push(cls.name)
+                    out.push(identName)
 
                     if (!field.name.startsWith('[')) {
                         out.push('.')
@@ -572,7 +573,7 @@ export class Annotator extends BaseReporter {
 
             // functions
             this.writeClassFunctions(
-                cls.name,
+                identName,
                 cls.functions,
                 '.',
                 out,
@@ -581,7 +582,7 @@ export class Annotator extends BaseReporter {
 
             // methods
             this.writeClassFunctions(
-                cls.name,
+                identName,
                 cls.methods,
                 ':',
                 out,
@@ -590,7 +591,7 @@ export class Annotator extends BaseReporter {
 
             // function constructors
             this.writeClassFunctions(
-                cls.name,
+                identName,
                 cls.functionConstructors,
                 '.',
                 out,
@@ -599,7 +600,7 @@ export class Annotator extends BaseReporter {
 
             // method constructors
             this.writeClassFunctions(
-                cls.name,
+                identName,
                 cls.constructors,
                 ':',
                 out,
