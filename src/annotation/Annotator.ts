@@ -163,7 +163,7 @@ export class Annotator extends BaseReporter {
                 return `${memberBase}${expression.indexer}${expression.member}`
 
             case 'operation':
-                return this.getOperationString(expression)
+                return this.getOperationString(expression, depth)
         }
     }
 
@@ -269,7 +269,10 @@ export class Annotator extends BaseReporter {
         }
     }
 
-    protected getOperationString(expression: LuaOperation): string {
+    protected getOperationString(
+        expression: LuaOperation,
+        depth?: number,
+    ): string {
         let lhs = expression.arguments[0]
         let rhs = expression.arguments[1]
 
@@ -277,18 +280,26 @@ export class Annotator extends BaseReporter {
             case 'call':
                 const callBase = this.getExpressionString(
                     expression.arguments[0],
+                    depth,
                 )
 
                 const args: string[] = []
                 for (let i = 1; i < expression.arguments.length; i++) {
-                    args.push(this.getExpressionString(expression.arguments[i]))
+                    args.push(
+                        this.getExpressionString(
+                            expression.arguments[i],
+                            depth,
+                        ),
+                    )
                 }
 
                 return `${callBase}(${args.join(', ')})`
 
             default:
-                let lhsString = this.getExpressionString(lhs)
-                let rhsString = rhs ? this.getExpressionString(rhs) : undefined
+                let lhsString = this.getExpressionString(lhs, depth)
+                let rhsString = rhs
+                    ? this.getExpressionString(rhs, depth)
+                    : undefined
 
                 if (!this.includeAsIs(lhs)) {
                     lhsString = `(${lhsString})`
