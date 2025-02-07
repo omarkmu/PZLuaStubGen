@@ -526,9 +526,11 @@ export class Annotator extends BaseReporter {
                         continue
                     }
 
+                    let canWriteExpression = true
                     let typeString: string | undefined
                     if (rosettaField) {
                         typeString = rosettaField.type?.trim()
+                        canWriteExpression = false
 
                         const notes = rosettaField.notes?.trim()
                         if (notes) {
@@ -555,9 +557,10 @@ export class Annotator extends BaseReporter {
                         out.push('.')
                     }
 
-                    const exprString = field.expression
-                        ? this.getExpressionString(field.expression)
-                        : 'nil'
+                    const exprString =
+                        field.expression && canWriteExpression
+                            ? this.getExpressionString(field.expression)
+                            : 'nil'
 
                     out.push(`${field.name} = ${exprString}`)
 
