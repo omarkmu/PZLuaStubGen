@@ -160,7 +160,7 @@ export class AnalysisContext {
                     resolved.luaType,
                 )
 
-                this.addField(scope, indexBase[0], key, rhs, index)
+                this.addField(scope, indexBase[0], key, rhs, lhs, index)
                 break
 
             case 'member':
@@ -188,6 +188,7 @@ export class AnalysisContext {
                         memberBase[0],
                         key,
                         rhs,
+                        lhs,
                         index,
                         isInstance,
                     )
@@ -662,6 +663,7 @@ export class AnalysisContext {
                 tableId,
                 literalKey,
                 field.value,
+                undefined,
                 1,
                 false,
                 true,
@@ -693,7 +695,8 @@ export class AnalysisContext {
         scope: LuaScope,
         id: string,
         field: string,
-        expression: LuaExpression,
+        rhs: LuaExpression,
+        lhs?: LuaExpression,
         index?: number,
         instance?: boolean,
         fromLiteral?: boolean,
@@ -706,12 +709,40 @@ export class AnalysisContext {
 
         // treat closure-based classes' non-function fields as instance fields
         if (info.isClosureClass) {
-            instance =
-                expression.type !== 'literal' ||
-                expression.luaType !== 'function'
+            instance = rhs.type !== 'literal' || rhs.luaType !== 'function'
         }
 
-        const types = this.resolveTypes({ expression })
+        // check for `:derive` calls in field setters
+        if (lhs && rhs.type === 'operation') {
+            const [base, deriveName] = this.checkDeriveCall(rhs) ?? []
+            const name = base && this.getFieldClassName(scope, lhs)
+
+            if (base && name) {
+                const newId = this.newTableID()
+                const newInfo = this.getTableInfo(newId)
+                newInfo.className = name
+
+                scope.items.push({
+                    type: 'partial',
+                    classInfo: {
+                        name,
+                        tableId: newId,
+                        base,
+                        deriveName,
+                        generated: true,
+                        definingModule: this.currentModule,
+                    },
+                })
+
+                rhs = {
+                    type: 'literal',
+                    luaType: 'table',
+                    tableId: newId,
+                }
+            }
+        }
+
+        const types = this.resolveTypes({ expression: rhs })
         const tableId = types.size === 1 ? [...types][0] : undefined
         const fieldInfo = tableId?.startsWith('@table')
             ? this.getTableInfo(tableId)
@@ -752,7 +783,7 @@ export class AnalysisContext {
         }
 
         fieldDefs.push({
-            expression,
+            expression: rhs,
             index,
             instance,
             fromLiteral,
@@ -1902,11 +1933,18 @@ export class AnalysisContext {
         return finalizedTypes
     }
 
-    protected getFieldClassName(scope: LuaScope, expr: LuaMember) {
+    protected getFieldClassName(
+        scope: LuaScope,
+        expr: LuaExpression,
+    ): string | undefined {
+        if (expr.type !== 'member') {
+            return
+        }
+
         const names: string[] = [expr.member]
 
         while (expr.type === 'member') {
-            const parent = expr.base
+            const parent: LuaExpression = expr.base
             if (parent.type === 'reference') {
                 names.push(scope.localIdToName(parent.id) ?? parent.id)
                 break
