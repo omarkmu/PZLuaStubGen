@@ -1116,9 +1116,6 @@ export class AnalysisContext {
         identExpr: LuaMember,
     ): boolean {
         const memberName = identExpr.member
-        if (identExpr.indexer !== '.' && memberName === 'new') {
-            return false
-        }
 
         const base = identExpr.base
         if (base.type !== 'reference') {
