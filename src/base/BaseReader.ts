@@ -1,6 +1,7 @@
-import fs from 'fs'
 import ast from 'luaparse'
 import type { BaseReaderArgs, AnyCallExpression } from './types'
+
+import { readFileContents, readLuaStringLiteral } from '../helpers'
 import {
     ExpressionOrHasBody,
     LuaBlockScope,
@@ -9,7 +10,6 @@ import {
     LuaScope,
     NodeWithBody,
 } from '../scopes'
-import { LuaHelpers } from './LuaHelpers'
 
 /**
  * Handles reading information from Lua files.
@@ -35,25 +35,6 @@ export abstract class BaseReader {
         }
 
         return aliases
-    }
-
-    /**
-     * Gets the identifier to use for a filename.
-     */
-    getFileIdentifier(filename: string, basePath?: string) {
-        if (basePath && filename.startsWith(basePath)) {
-            filename = filename.slice(basePath.length)
-        }
-
-        if (filename.startsWith('/') || filename.startsWith('\\')) {
-            filename = filename.slice(1)
-        }
-
-        if (filename.endsWith('.lua')) {
-            filename = filename.slice(0, -4)
-        }
-
-        return filename.replace(/[\\.]/g, '/')
     }
 
     /**
@@ -327,17 +308,12 @@ export abstract class BaseReader {
     protected async readFileContents(
         filePath: string,
     ): Promise<string | undefined> {
-        let content: string
         try {
-            const file = await fs.promises.open(filePath)
-            content = await file.readFile('utf-8')
-            await file.close()
+            return readFileContents(filePath)
         } catch (e) {
             this.errors.push(`Failed to read file '${filePath}': ${e}`)
             return
         }
-
-        return content
     }
 
     /**
@@ -375,7 +351,7 @@ export abstract class BaseReader {
         }
 
         if (argument) {
-            return LuaHelpers.readLuaString(argument.raw)
+            return readLuaStringLiteral(argument.raw)
         }
     }
 

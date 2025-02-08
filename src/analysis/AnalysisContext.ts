@@ -1,6 +1,5 @@
 import ast from 'luaparse'
 import { LuaScope } from '../scopes'
-import { LuaHelpers } from '../base'
 import {
     AssignmentItem,
     FunctionDefinitionItem,
@@ -32,6 +31,7 @@ import {
     AnalyzedRequire,
     LuaMember,
 } from './types'
+import { getLuaFieldKey, readLuaStringLiteral } from '../helpers'
 
 /**
  * Shared context for analysis of multiple Lua files.
@@ -704,7 +704,7 @@ export class AnalysisContext {
             funcInfo.identifierExpression = {
                 type: 'member',
                 base: { type: 'reference', id: '@generated' },
-                member: LuaHelpers.getLuaFieldKey(field),
+                member: getLuaFieldKey(field),
                 indexer: ':',
             }
         }
@@ -1287,7 +1287,7 @@ export class AnalysisContext {
             return
         }
 
-        const type = LuaHelpers.readLuaString(arg.literal ?? '')
+        const type = readLuaStringLiteral(arg.literal ?? '')
         if (!type) {
             return
         }
@@ -1503,10 +1503,7 @@ export class AnalysisContext {
                     continue
                 }
 
-                checkSubfields.push([
-                    expr.tableId,
-                    LuaHelpers.getLuaFieldKey(field),
-                ])
+                checkSubfields.push([expr.tableId, getLuaFieldKey(field)])
 
                 continue
             }
@@ -1533,7 +1530,7 @@ export class AnalysisContext {
                     indexer = identExpr.indexer
                 } else {
                     // X.Y = function(...)
-                    name = LuaHelpers.getLuaFieldKey(field)
+                    name = getLuaFieldKey(field)
                 }
 
                 const func = this.finalizeFunction(id, name)
@@ -1550,7 +1547,7 @@ export class AnalysisContext {
                 addedFunction = true
             }
 
-            const name = LuaHelpers.getLuaFieldKey(field)
+            const name = getLuaFieldKey(field)
             const instanceExprs = definingExprs.filter((x) => x.instance)
             if (instanceExprs.length > 0) {
                 const instanceTypes = new Set<string>()
@@ -1643,7 +1640,7 @@ export class AnalysisContext {
             const tableInfo = this.getTableInfo(id)
 
             for (let [field, expressions] of tableInfo.definitions) {
-                let name = LuaHelpers.getLuaFieldKey(field)
+                let name = getLuaFieldKey(field)
                 if (baseName) {
                     name = name.startsWith('[')
                         ? `${baseName}${name}`
@@ -2028,7 +2025,7 @@ export class AnalysisContext {
                 continue
             }
 
-            const fieldKey = LuaHelpers.getLuaFieldKey(defKey)
+            const fieldKey = getLuaFieldKey(defKey)
             const [value, types] = this.finalizeDefinitions(defs, refs, seen)
 
             let key: TableKey
@@ -2204,7 +2201,7 @@ export class AnalysisContext {
         if (!type) {
             internal = key
         } else if (type === 'string') {
-            internal = LuaHelpers.readLuaString(key)
+            internal = readLuaStringLiteral(key)
         }
 
         if (!internal) {

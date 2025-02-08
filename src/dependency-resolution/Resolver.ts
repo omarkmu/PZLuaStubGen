@@ -1,9 +1,10 @@
 import fs from 'fs'
 import path from 'path'
 import { Deque } from '@datastructures-js/deque'
-import { BaseReporter, LuaHelpers } from '../base'
+import { BaseReporter } from '../base'
 import { DependencyReader } from './DependencyReader'
 import { LuaDependencies, LuaDependencyInfoMap, ResolveArgs } from './types'
+import { getAliasMap, getFileIdentifier } from '../helpers'
 
 /**
  * Handles determination of dependencies between files.
@@ -82,7 +83,7 @@ export class Resolver extends BaseReporter {
 
         const order = new Set<string>()
         const seen = new Set<string>()
-        const aliases = LuaHelpers.getAliasMap(this.fileSet)
+        const aliases = getAliasMap(this.fileSet)
 
         for (const [i, files] of subdirFileLists.entries()) {
             if (files.length === 0) {
@@ -330,10 +331,7 @@ export class Resolver extends BaseReporter {
      * @param filePath
      */
     protected async readFile(filePath: string) {
-        const identifier = this.reader.getFileIdentifier(
-            filePath,
-            this.inDirectory,
-        )
+        const identifier = getFileIdentifier(filePath, this.inDirectory)
 
         try {
             if (this.fileSet.has(identifier)) {

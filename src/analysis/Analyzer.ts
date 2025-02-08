@@ -1,9 +1,10 @@
 import path from 'path'
 import { AnalyzeArgs, AnalyzedModule } from './types'
-import { BaseReporter, LuaHelpers } from '../base'
+import { BaseReporter } from '../base'
 import { Resolver } from '../dependency-resolution'
 import { AnalysisReader } from './AnalysisReader'
 import { AnalysisContext } from './AnalysisContext'
+import { getAliasMap } from '../helpers'
 
 /**
  * Handles analysis of module types.
@@ -64,7 +65,7 @@ export class Analyzer extends BaseReporter {
      * Reads the files in the provided array in order.
      */
     protected async read(identifiers: string[]): Promise<AnalyzedModule[]> {
-        this.context.setAliasMap(LuaHelpers.getAliasMap(identifiers))
+        this.context.setAliasMap(getAliasMap(identifiers))
 
         // analyze types
         for (const identifier of identifiers) {

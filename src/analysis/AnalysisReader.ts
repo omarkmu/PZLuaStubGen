@@ -7,7 +7,6 @@ import {
     AssignmentLHS,
     BaseReader,
     BasicLiteral,
-    LuaHelpers,
 } from '../base'
 
 import {
@@ -18,6 +17,7 @@ import {
     TableField,
     TableKey,
 } from './types'
+import { readLuaStringLiteral } from '../helpers'
 
 /**
  * Handles reading Lua files for analysis.
@@ -253,7 +253,7 @@ export class AnalysisReader extends BaseReader {
                         }
 
                         if (literalType === 'string') {
-                            key.name = LuaHelpers.readLuaString(literal.raw)
+                            key.name = readLuaStringLiteral(literal.raw)
                         }
 
                         break
