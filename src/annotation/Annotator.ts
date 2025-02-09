@@ -488,8 +488,14 @@ export class Annotator extends BaseReporter {
 
             const writtenFields = new Set<string>()
 
+            const noDeclaration =
+                tags.has('NoAnnotation') && tags.has('NoInitializer')
+
+            let wroteNewlines = false
             if (out.length > 1) {
                 out.push('\n')
+                out.push('\n')
+                wroteNewlines = true
             }
 
             if (!tags.has('NoAnnotation')) {
@@ -569,8 +575,8 @@ export class Annotator extends BaseReporter {
                 }
             }
 
-            // definition
             if (!tags.has('NoInitializer')) {
+                // definition
                 out.push('\n')
 
                 if (cls.generated) {
@@ -619,6 +625,8 @@ export class Annotator extends BaseReporter {
                         continue
                     }
 
+                    writtenFields.add(field.name)
+
                     let canWriteExpression = true
                     let typeString: string | undefined
                     if (rosettaField) {
@@ -661,6 +669,11 @@ export class Annotator extends BaseReporter {
                         out.push(` ---@type ${typeString}`)
                     }
                 }
+            }
+
+            // remove extra newline if there's no declaration or fields
+            if (wroteNewlines && noDeclaration && writtenFields.size === 0) {
+                out.pop()
             }
 
             // functions
@@ -710,10 +723,6 @@ export class Annotator extends BaseReporter {
         out: string[],
         rosettaClass: RosettaClass | undefined,
     ) {
-        if (functions.length > 0) {
-            out.push('\n')
-        }
-
         const sortedFunctions = this.alphabetize
             ? functions.sort((a, b) => a.name.localeCompare(b.name))
             : functions
@@ -778,7 +787,6 @@ export class Annotator extends BaseReporter {
             )
 
             if (prefix) {
-                out.push('\n')
                 out.push(prefix)
             }
 
