@@ -32,27 +32,40 @@ export class Rosetta {
         this.files = {}
     }
 
-    async load(): Promise<boolean> {
-        return (await this.loadFiles('json')) || (await this.loadFiles('yml'))
+    async load(dir?: string): Promise<boolean> {
+        return (await this.loadJSON(dir)) || (await this.loadYAML(dir))
     }
 
-    async loadJSON(
+    async loadJSON(dir?: string): Promise<boolean> {
+        return await this.loadFiles('json', dir)
+    }
+
+    async loadJsonFile(
         filePath: string,
         basePath?: string,
     ): Promise<RosettaFile | undefined> {
-        basePath ??= path.dirname(filePath)
-        return await this.loadFile(filePath, basePath, JSON.parse, ['.json'])
+        return await this.loadFile(
+            filePath,
+            basePath ?? path.dirname(filePath),
+            JSON.parse,
+            ['.json'],
+        )
     }
 
-    async loadYAML(
+    async loadYAML(dir?: string): Promise<boolean> {
+        return await this.loadFiles('yml', dir)
+    }
+
+    async loadYamlFile(
         filePath: string,
         basePath?: string,
     ): Promise<RosettaFile | undefined> {
-        basePath ??= path.dirname(filePath)
-        return await this.loadFile(filePath, basePath, YAML.parse, [
-            '.yml',
-            '.yaml',
-        ])
+        return await this.loadFile(
+            filePath,
+            basePath ?? path.dirname(filePath),
+            YAML.parse,
+            ['.yml', '.yaml'],
+        )
     }
 
     readData(id: string, data: any): RosettaFile | undefined {
@@ -139,8 +152,8 @@ export class Rosetta {
         }
     }
 
-    protected async loadFiles(type: string): Promise<boolean> {
-        const basePath = `${this.inputDirectory}/${type}`
+    protected async loadFiles(type: string, dir?: string): Promise<boolean> {
+        const basePath = `${dir ?? this.inputDirectory}/${type}`
         if (!fs.existsSync(basePath) || !fs.statSync(basePath).isDirectory) {
             return false
         }

@@ -211,7 +211,7 @@ export class Annotator extends BaseReporter {
 
     protected async getKahluaModule(): Promise<AnalyzedModule | undefined> {
         const kahluaDataPath = path.join(__dirname, '../../__kahlua.yml')
-        const file = await this.rosetta.loadYAML(kahluaDataPath)
+        const file = await this.rosetta.loadYamlFile(kahluaDataPath)
         if (!file) {
             this.errors.push(
                 `Failed to load kahlua data from ${kahluaDataPath}`,
