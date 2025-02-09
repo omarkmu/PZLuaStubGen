@@ -251,6 +251,7 @@ export interface AnalyzedRequire {
 
 export interface AnalyzedModule {
     id: string
+    prefix?: string
     locals: AnalyzedLocal[]
     functions: AnalyzedFunction[]
     classes: AnalyzedClass[]

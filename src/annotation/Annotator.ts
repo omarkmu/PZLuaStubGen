@@ -22,8 +22,9 @@ import {
     RosettaOperator,
     RosettaOverload,
 } from '../rosetta'
+import { rosettaFileToModule } from '../helpers'
 
-const PREAMBLE = '---@meta\n'
+const PREFIX = '---@meta'
 
 /**
  * Handles annotation of Lua files.
@@ -33,6 +34,7 @@ export class Annotator extends BaseReporter {
     protected rosetta: Rosetta
     protected useRosetta: boolean
     protected alphabetize: boolean
+    protected includeKahlua: boolean
     protected exclude: Set<string>
     protected excludeFields: Set<string>
 
@@ -41,6 +43,7 @@ export class Annotator extends BaseReporter {
 
         this.outDirectory = path.normalize(args.outputDirectory)
         this.alphabetize = args.alphabetize
+        this.includeKahlua = args.includeKahlua
         this.exclude = new Set(args.exclude)
 
         this.useRosetta = args.rosetta !== undefined
@@ -68,7 +71,7 @@ export class Annotator extends BaseReporter {
     }
 
     generateStub(mod: AnalyzedModule) {
-        const out = [PREAMBLE]
+        const out = [(mod.prefix ?? PREFIX) + '\n']
 
         const rosettaFile = this.rosetta.files[mod.id]
 
@@ -130,6 +133,36 @@ export class Annotator extends BaseReporter {
         return modules
     }
 
+    protected async getKahluaModule(): Promise<AnalyzedModule | undefined> {
+        const kahluaDataPath = path.join(__dirname, '../../__kahlua.yml')
+        const file = await this.rosetta.loadYAML(kahluaDataPath)
+        if (!file) {
+            this.errors.push(
+                `Failed to load kahlua data from ${kahluaDataPath}`,
+            )
+
+            return
+        }
+
+        const mod = rosettaFileToModule(file)
+        mod.prefix = '---@meta _'
+
+        // manually set `table.pairs = pairs`
+        const tableCls = mod.classes.find((x) => x.name === 'table')
+        if (tableCls) {
+            tableCls.setterFields.push({
+                name: 'pairs',
+                types: new Set(['function']),
+                expression: {
+                    type: 'reference',
+                    id: 'pairs',
+                },
+            })
+        }
+
+        return mod
+    }
+
     protected async getModules(): Promise<AnalyzedModule[]> {
         const analyzer = new Analyzer({
             inputDirectory: this.inDirectory,
@@ -138,7 +171,18 @@ export class Annotator extends BaseReporter {
             suppressErrors: true, // report errors at the end
         })
 
-        return await analyzer.run()
+        const modules = await analyzer.run()
+
+        if (!this.includeKahlua) {
+            return modules
+        }
+
+        const mod = await this.getKahluaModule()
+        if (mod) {
+            modules.push(mod)
+        }
+
+        return modules
     }
 
     protected getExpressionString(
@@ -435,135 +479,123 @@ export class Annotator extends BaseReporter {
             const excludeFields = this.excludeFields.has(cls.name)
             const rosettaClass: RosettaClass | undefined =
                 rosettaFile?.classes[cls.name]
+            const tags = rosettaClass?.tags
+                ? new Set(rosettaClass.tags)
+                : new Set()
 
             const identName = cls.name.replaceAll('.', '_')
             const base = rosettaClass?.extends ?? cls.extends
 
-            // class annotation
+            const writtenFields = new Set<string>()
+
             if (out.length > 1) {
                 out.push('\n')
             }
 
-            if (rosettaClass?.deprecated) {
-                out.push('\n---@deprecated')
-            }
-
-            if (rosettaClass?.notes) {
-                out.push(`\n---${rosettaClass.notes}`)
-            }
-
-            out.push(`\n---@class ${cls.name}`)
-            if (base) {
-                out.push(` : ${base}`)
-            }
-
-            for (const overload of cls.overloads) {
-                out.push('\n---@overload fun(')
-
-                const params: string[] = []
-                for (const param of overload.parameters) {
-                    params.push(
-                        `${param.name}: ${this.getTypeString(param.types)}`,
-                    )
+            if (!tags.has('NoAnnotation')) {
+                // class annotation
+                if (rosettaClass?.deprecated) {
+                    out.push('\n---@deprecated')
                 }
 
-                out.push(params.join())
-                out.push(')')
-
-                const returns: string[] = []
-                for (const ret of overload.returnTypes) {
-                    returns.push(this.getTypeString(ret))
+                if (rosettaClass?.notes) {
+                    out.push(`\n---${rosettaClass.notes}`)
                 }
 
-                if (returns.length > 0) {
-                    out.push(': ')
-                    out.push(returns.join())
+                out.push(`\n---@class ${cls.name}`)
+                if (base) {
+                    out.push(` : ${base}`)
                 }
-            }
 
-            this.writeRosettaOperators(rosettaClass?.operators, out)
+                this.writeRosettaOperators(rosettaClass?.operators, out)
 
-            if (!this.writeRosettaOverloads(rosettaClass?.overloads, out)) {
-                for (const overload of cls.overloads) {
-                    out.push('\n---@overload fun(')
+                if (!this.writeRosettaOverloads(rosettaClass?.overloads, out)) {
+                    for (const overload of cls.overloads) {
+                        out.push('\n---@overload fun(')
 
-                    const params: string[] = []
-                    for (const param of overload.parameters) {
-                        params.push(
-                            `${param.name}: ${this.getTypeString(param.types)}`,
+                        const params: string[] = []
+                        for (const param of overload.parameters) {
+                            params.push(
+                                `${param.name}: ${this.getTypeString(param.types)}`,
+                            )
+                        }
+
+                        out.push(params.join())
+                        out.push(')')
+
+                        const returns: string[] = []
+                        for (const ret of overload.returnTypes) {
+                            returns.push(this.getTypeString(ret))
+                        }
+
+                        if (returns.length > 0) {
+                            out.push(': ')
+                            out.push(returns.join())
+                        }
+                    }
+                }
+
+                const sortedFields = this.alphabetize
+                    ? [...cls.fields].sort((a, b) =>
+                          a.name.localeCompare(b.name),
+                      )
+                    : cls.fields
+
+                // fields
+                if (!excludeFields) {
+                    for (const field of sortedFields) {
+                        const rosettaField = rosettaClass?.fields?.[field.name]
+
+                        writtenFields.add(field.name)
+
+                        let typeString: string
+                        let notes: string
+                        if (rosettaField) {
+                            typeString = rosettaField.type?.trim() ?? 'any'
+                            notes = rosettaField.notes?.trim() ?? ''
+                        } else {
+                            typeString = this.getTypeString(field.types)
+                            notes = ''
+                        }
+
+                        if (notes) {
+                            notes = ' ' + notes
+                        }
+
+                        out.push(
+                            `\n---@field ${field.name} ${typeString}${notes}`,
                         )
                     }
-
-                    out.push(params.join())
-                    out.push(')')
-
-                    const returns: string[] = []
-                    for (const ret of overload.returnTypes) {
-                        returns.push(this.getTypeString(ret))
-                    }
-
-                    if (returns.length > 0) {
-                        out.push(': ')
-                        out.push(returns.join())
-                    }
-                }
-            }
-
-            const sortedFields = this.alphabetize
-                ? [...cls.fields].sort((a, b) => a.name.localeCompare(b.name))
-                : cls.fields
-
-            // fields
-            const writtenFields = new Set<string>()
-            if (!excludeFields) {
-                for (const field of sortedFields) {
-                    const rosettaField = rosettaClass?.fields?.[field.name]
-
-                    writtenFields.add(field.name)
-
-                    let typeString: string
-                    let notes: string
-                    if (rosettaField) {
-                        typeString = rosettaField.type?.trim() ?? 'any'
-                        notes = rosettaField.notes?.trim() ?? ''
-                    } else {
-                        typeString = this.getTypeString(field.types)
-                        notes = ''
-                    }
-
-                    if (notes) {
-                        notes = ' ' + notes
-                    }
-
-                    out.push(`\n---@field ${field.name} ${typeString}${notes}`)
                 }
             }
 
             // definition
-            out.push('\n')
+            if (!tags.has('NoInitializer')) {
+                out.push('\n')
 
-            if (cls.generated) {
-                // generated classes aren't real globals
-                out.push('local ')
-            }
+                if (cls.generated) {
+                    // generated classes aren't real globals
+                    out.push('local ')
+                }
 
-            out.push(`${identName} = `)
+                out.push(`${identName} = `)
 
-            if (cls.deriveName && base) {
-                out.push(`${base}:derive("${cls.deriveName}")`)
-            } else if (!excludeFields && cls.literalFields.length > 0) {
-                out.push('{')
+                if (cls.deriveName && base) {
+                    out.push(`${base}:derive("${cls.deriveName}")`)
+                } else if (!excludeFields && cls.literalFields.length > 0) {
+                    out.push('{')
 
-                this.writeTableFields(
-                    cls.literalFields,
-                    out,
-                    undefined,
-                    writtenFields,
-                )
+                    this.writeTableFields(
+                        cls.literalFields,
+                        out,
+                        undefined,
+                        writtenFields,
+                    )
 
-                out.push('\n}')
-            } else {
-                out.push('{}')
+                    out.push('\n}')
+                } else {
+                    out.push('{}')
+                }
             }
 
             // inject static `Type` field for derived classes
@@ -701,9 +733,10 @@ export class Annotator extends BaseReporter {
 
             const fullName = `${name}${indexer}${funcName}`
             if (rosettaFunc) {
+                out.push('\n')
                 this.validateRosettaFunction(rosettaFunc, func, isMethod)
                 this.writeRosettaFunction(rosettaFunc, fullName, out, func)
-                return
+                continue
             }
 
             const prefix = this.getFunctionPrefix(
@@ -727,6 +760,10 @@ export class Annotator extends BaseReporter {
         rosettaFile: RosettaFile | undefined,
     ): boolean {
         for (const func of mod.functions) {
+            if (out.length > 1) {
+                out.push('\n')
+            }
+
             const rosettaFunc = rosettaFile?.functions[func.name]
             if (rosettaFunc) {
                 const funcName = rosettaFunc.name ?? func.name

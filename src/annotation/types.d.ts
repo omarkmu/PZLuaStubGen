@@ -20,6 +20,11 @@ export interface AnnotateArgs extends BaseReportArgs {
     alphabetize: boolean
 
     /**
+     * Whether to include the kahlua stub in generated output.
+     */
+    includeKahlua: boolean
+
+    /**
      * Classes which should be excluded from the generated stubs.
      */
     exclude?: string[]

@@ -62,6 +62,11 @@ const annotateCommand = (yargs: yargs.Argv) => {
                 default: true,
                 desc: 'Whether fields and functions should be alphabetically sorted',
             })
+            .option('include-kahlua', {
+                type: 'boolean',
+                alias: 'k',
+                desc: 'Whether to generate the kahlua stub.',
+            })
             .option('rosetta', {
                 type: 'string',
                 alias: 'r',
