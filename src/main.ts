@@ -64,7 +64,7 @@ const annotateCommand = (yargs: yargs.Argv) => {
             })
             .option('rosetta', {
                 type: 'string',
-                default: 'assets/rosetta',
+                alias: 'r',
                 desc: 'The directory to use for rosetta files',
             })
             .option('exclude', {

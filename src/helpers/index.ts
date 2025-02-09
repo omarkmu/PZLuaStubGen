@@ -1,3 +1,5 @@
+export { arrayToRecord } from './array-to-record'
+export { expect, expectField } from './expect'
 export { getAliasMap } from './get-alias-map'
 export { getAliases } from './get-aliases'
 export { getFileIdentifier } from './get-file-identifier'

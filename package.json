@@ -9,7 +9,7 @@
     "dependencies": {
         "@datastructures-js/deque": "^1.0.4",
         "luaparse": "^0.3.1",
-        "pz-rosetta-ts": "^1.0.2",
+        "yaml": "^2.7.0",
         "yargs": "^17.7.2"
     },
     "devDependencies": {
@@ -18,7 +18,6 @@
         "@types/yargs": "^17.0.33",
         "nodemon": "^3.1.9",
         "prettier": "^3.4.2",
-        "rollup": "^4.32.0",
         "tslib": "^2.8.1",
         "typescript": "^5.7.3"
     }

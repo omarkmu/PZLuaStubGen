@@ -1,14 +1,7 @@
-import fs from 'fs'
 import path from 'path'
-import {
-    Rosetta,
-    RosettaLuaClass,
-    RosettaLuaConstructor,
-    RosettaLuaFunction,
-} from 'pz-rosetta-ts'
-
 import { BaseReporter } from '../base'
 import { AnnotateArgs } from './types'
+
 import {
     AnalyzedFunction,
     AnalyzedModule,
@@ -20,6 +13,16 @@ import {
     TableField,
 } from '../analysis'
 
+import {
+    Rosetta,
+    RosettaClass,
+    RosettaConstructor,
+    RosettaFile,
+    RosettaFunction,
+    RosettaOperator,
+    RosettaOverload,
+} from '../rosetta'
+
 const PREAMBLE = '---@meta\n'
 
 /**
@@ -28,6 +31,7 @@ const PREAMBLE = '---@meta\n'
 export class Annotator extends BaseReporter {
     protected outDirectory: string
     protected rosetta: Rosetta
+    protected useRosetta: boolean
     protected alphabetize: boolean
     protected exclude: Set<string>
     protected excludeFields: Set<string>
@@ -36,9 +40,13 @@ export class Annotator extends BaseReporter {
         super(args)
 
         this.outDirectory = path.normalize(args.outputDirectory)
-        this.rosetta = new Rosetta(args.rosetta)
         this.alphabetize = args.alphabetize
         this.exclude = new Set(args.exclude)
+
+        this.useRosetta = args.rosetta !== undefined
+        this.rosetta = new Rosetta({
+            inputDirectory: args.rosetta ?? '',
+        })
 
         const excludeFields = args.excludeFields ?? []
         if (args.excludeKnownDefs) {
@@ -57,22 +65,14 @@ export class Annotator extends BaseReporter {
         }
 
         this.excludeFields = new Set(excludeFields)
-
-        try {
-            if (fs.existsSync(args.rosetta)) {
-                this.rosetta.load()
-            }
-        } catch (e) {
-            if (!this.suppressErrors) {
-                console.error(`Failed to load rosetta: ${e}`)
-            }
-        }
     }
 
     generateStub(mod: AnalyzedModule) {
         const out = [PREAMBLE]
 
-        if (this.writeRequires(mod, out)) {
+        const rosettaFile = this.rosetta.files[mod.id]
+
+        if (this.writeRequires(mod, out, rosettaFile)) {
             out.push('\n')
         }
 
@@ -80,11 +80,11 @@ export class Annotator extends BaseReporter {
             out.push('\n')
         }
 
-        if (this.writeClasses(mod, out)) {
+        if (this.writeClasses(mod, out, rosettaFile)) {
             out.push('\n')
         }
 
-        if (this.writeGlobalFunctions(mod, out)) {
+        if (this.writeGlobalFunctions(mod, out, rosettaFile)) {
             out.push('\n')
         }
 
@@ -97,6 +97,10 @@ export class Annotator extends BaseReporter {
      * Runs typestub generation.
      */
     async run() {
+        if (this.useRosetta) {
+            await this.rosetta.load()
+        }
+
         this.resetState()
         const modules = await this.getModules()
 
@@ -399,13 +403,13 @@ export class Annotator extends BaseReporter {
     }
 
     protected validateRosettaFunction(
-        rosettaFunc: RosettaLuaFunction | RosettaLuaConstructor,
+        rosettaFunc: RosettaFunction | RosettaConstructor,
         func: AnalyzedFunction,
         isMethod: boolean,
     ) {
-        const rosettaParamCount = rosettaFunc.parameters.length
+        const rosettaParamCount = rosettaFunc.parameters?.length ?? 0
         const luaParamCount = func.parameters.length
-        const name = (rosettaFunc as any).name ?? func.name
+        const name = (rosettaFunc as RosettaFunction).name ?? func.name
 
         if (luaParamCount !== rosettaParamCount) {
             throw new Error(
@@ -416,7 +420,11 @@ export class Annotator extends BaseReporter {
         }
     }
 
-    protected writeClasses(mod: AnalyzedModule, out: string[]): boolean {
+    protected writeClasses(
+        mod: AnalyzedModule,
+        out: string[],
+        rosettaFile: RosettaFile | undefined,
+    ): boolean {
         let writtenCount = 0
         for (const cls of mod.classes) {
             if (this.exclude.has(cls.name)) {
@@ -425,11 +433,11 @@ export class Annotator extends BaseReporter {
 
             writtenCount++
             const excludeFields = this.excludeFields.has(cls.name)
-            const rosettaClass: RosettaLuaClass | undefined =
-                this.rosetta.luaClasses[cls.name]
+            const rosettaClass: RosettaClass | undefined =
+                rosettaFile?.classes[cls.name]
 
             const identName = cls.name.replaceAll('.', '_')
-            const base = rosettaClass?.extendz ?? cls.extends
+            const base = rosettaClass?.extends ?? cls.extends
 
             // class annotation
             if (out.length > 1) {
@@ -473,12 +481,39 @@ export class Annotator extends BaseReporter {
                 }
             }
 
+            this.writeRosettaOperators(rosettaClass?.operators, out)
+
+            if (!this.writeRosettaOverloads(rosettaClass?.overloads, out)) {
+                for (const overload of cls.overloads) {
+                    out.push('\n---@overload fun(')
+
+                    const params: string[] = []
+                    for (const param of overload.parameters) {
+                        params.push(
+                            `${param.name}: ${this.getTypeString(param.types)}`,
+                        )
+                    }
+
+                    out.push(params.join())
+                    out.push(')')
+
+                    const returns: string[] = []
+                    for (const ret of overload.returnTypes) {
+                        returns.push(this.getTypeString(ret))
+                    }
+
+                    if (returns.length > 0) {
+                        out.push(': ')
+                        out.push(returns.join())
+                    }
+                }
+            }
+
             const sortedFields = this.alphabetize
                 ? [...cls.fields].sort((a, b) => a.name.localeCompare(b.name))
                 : cls.fields
 
             // fields
-
             const writtenFields = new Set<string>()
             if (!excludeFields) {
                 for (const field of sortedFields) {
@@ -533,7 +568,7 @@ export class Annotator extends BaseReporter {
 
             // inject static `Type` field for derived classes
             if (cls.deriveName && !excludeFields) {
-                const rosettaField = rosettaClass?.values.Type
+                const rosettaField = rosettaClass?.staticFields?.Type
 
                 // skip if rosetta `Type` field is defined
                 if (!rosettaField) {
@@ -545,7 +580,8 @@ export class Annotator extends BaseReporter {
             if (!excludeFields) {
                 const statics = [...cls.staticFields, ...cls.setterFields]
                 for (const field of statics) {
-                    const rosettaField = rosettaClass?.values?.[field.name]
+                    const rosettaField =
+                        rosettaClass?.staticFields?.[field.name]
 
                     if (writtenFields.has(field.name)) {
                         continue
@@ -640,7 +676,7 @@ export class Annotator extends BaseReporter {
         functions: AnalyzedFunction[],
         indexer: string,
         out: string[],
-        rosettaClass: RosettaLuaClass | undefined,
+        rosettaClass: RosettaClass | undefined,
     ) {
         if (functions.length > 0) {
             out.push('\n')
@@ -652,18 +688,15 @@ export class Annotator extends BaseReporter {
 
         const isMethod = indexer === ':'
         for (const func of sortedFunctions) {
-            let rosettaFunc:
-                | RosettaLuaFunction
-                | RosettaLuaConstructor
-                | undefined
+            let rosettaFunc: RosettaFunction | RosettaConstructor | undefined
 
             let funcName = func.name
             if (func.name === 'new') {
-                rosettaFunc = rosettaClass?.conztructor
+                rosettaFunc = rosettaClass?.constructor
             } else if (rosettaClass) {
                 rosettaFunc = isMethod
-                    ? rosettaClass.methods[func.name]
-                    : rosettaClass.functions[func.name]
+                    ? rosettaClass.methods?.[func.name]
+                    : rosettaClass.staticMethods?.[func.name]
             }
 
             const fullName = `${name}${indexer}${funcName}`
@@ -691,9 +724,10 @@ export class Annotator extends BaseReporter {
     protected writeGlobalFunctions(
         mod: AnalyzedModule,
         out: string[],
+        rosettaFile: RosettaFile | undefined,
     ): boolean {
         for (const func of mod.functions) {
-            const rosettaFunc = this.rosetta.functions[func.name]
+            const rosettaFunc = rosettaFile?.functions[func.name]
             if (rosettaFunc) {
                 const funcName = rosettaFunc.name ?? func.name
                 this.validateRosettaFunction(rosettaFunc, func, false)
@@ -754,6 +788,67 @@ export class Annotator extends BaseReporter {
         return mod.locals.length > 0
     }
 
+    protected writeRosettaOperators(
+        operators: RosettaOperator[] | undefined,
+        out: string[],
+    ): boolean {
+        if (operators === undefined) {
+            return false
+        }
+
+        for (const op of operators) {
+            if (!op.operation || !op.return) {
+                continue
+            }
+
+            out.push(`\n---@operator ${op.operation}`)
+            if (op.parameter) {
+                out.push(`(${op.parameter})`)
+            }
+
+            out.push(`: ${op.return}`)
+        }
+
+        return true
+    }
+
+    protected writeRosettaOverloads(
+        overloads: RosettaOverload[] | undefined,
+        out: string[],
+    ): boolean {
+        if (overloads === undefined) {
+            return false
+        }
+
+        for (const overload of overloads) {
+            out.push('\n---@overload fun(')
+
+            const params: string[] = []
+            for (const param of overload.parameters ?? []) {
+                params.push(`${param.name}: ${param.type}`)
+            }
+
+            out.push(params.join())
+            out.push(')')
+
+            const returns: string[] = []
+            for (const ret of overload.return ?? []) {
+                if (!ret.type) {
+                    continue
+                }
+
+                returns.push(ret.type)
+            }
+
+            if (returns.length > 0) {
+                out.push(': ')
+                out.push(returns.join())
+            }
+        }
+
+        return true
+    }
+
     protected writeReturns(mod: AnalyzedModule, out: string[]): boolean {
         if (mod.returns.length === 0) {
             return false
@@ -781,15 +876,18 @@ export class Annotator extends BaseReporter {
         return true
     }
 
-    protected writeRequires(mod: AnalyzedModule, out: string[]): boolean {
+    protected writeRequires(
+        mod: AnalyzedModule,
+        out: string[],
+        rosettaFile: RosettaFile | undefined,
+    ): boolean {
         if (mod.requires.length === 0) {
             return false
         }
 
         let count = 0
         for (const req of mod.requires) {
-            const rosettaClass: RosettaLuaClass | undefined =
-                this.rosetta.luaClasses[req.name]
+            const rosettaClass = rosettaFile?.classes[req.name]
 
             // skip global requires that have a rosetta class defined
             if (rosettaClass) {
@@ -808,12 +906,12 @@ export class Annotator extends BaseReporter {
     }
 
     protected writeRosettaFunction(
-        rosettaFunc: RosettaLuaFunction | RosettaLuaConstructor,
+        rosettaFunc: RosettaFunction | RosettaConstructor,
         name: string,
         out: string[],
         func: AnalyzedFunction,
     ) {
-        if ((rosettaFunc as any).deprecated) {
+        if ((rosettaFunc as RosettaFunction).deprecated) {
             out.push(`\n---@deprecated`)
         }
 
@@ -821,19 +919,33 @@ export class Annotator extends BaseReporter {
             out.push(`\n---${rosettaFunc.notes}`)
         }
 
-        for (let i = 0; i < rosettaFunc.parameters.length; i++) {
-            const param = rosettaFunc.parameters[i]
-            out.push(`\n---@param ${param.name} ${param.type.trim()}`)
+        const params = rosettaFunc.parameters ?? []
+        for (let i = 0; i < params.length; i++) {
+            const param = params[i]
+            out.push(`\n---@param ${param.name} ${param.type?.trim()}`)
             if (param.notes) {
                 out.push(` ${param.notes}`)
             }
         }
 
-        const returns = (rosettaFunc as any).returns
+        const returns = (rosettaFunc as RosettaFunction).return
         if (returns) {
-            out.push(`\n---@return ${returns.type.trim()}`)
-            if (returns.notes) {
-                out.push(` #${returns.notes}`)
+            for (const ret of returns) {
+                if (!ret.type) {
+                    continue
+                }
+
+                out.push(`\n---@return ${ret.type.trim()}`)
+
+                let notesPrefix = '#'
+                if (ret.name) {
+                    notesPrefix = ''
+                    out.push(` ${ret.name}`)
+                }
+
+                if (ret.notes) {
+                    out.push(` ${notesPrefix}${ret.notes}`)
+                }
             }
         } else {
             for (const ret of func.returnTypes) {
@@ -841,11 +953,16 @@ export class Annotator extends BaseReporter {
             }
         }
 
+        this.writeRosettaOverloads(
+            (rosettaFunc as RosettaFunction).overloads,
+            out,
+        )
+
         out.push('\n')
         out.push(
             this.getFunctionStringFromParamNames(
                 name,
-                rosettaFunc.parameters.map((x) => x.name),
+                params.map((x) => x.name),
             ),
         )
     }
