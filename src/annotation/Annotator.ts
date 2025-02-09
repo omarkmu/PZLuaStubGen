@@ -22,7 +22,7 @@ import {
     RosettaOperator,
     RosettaOverload,
 } from '../rosetta'
-import { rosettaFileToModule } from '../helpers'
+import { convertRosettaFile } from '../helpers'
 
 const PREFIX = '---@meta'
 
@@ -144,7 +144,7 @@ export class Annotator extends BaseReporter {
             return
         }
 
-        const mod = rosettaFileToModule(file)
+        const mod = convertRosettaFile(file)
         mod.prefix = '---@meta _'
 
         // manually set `table.pairs = pairs`
