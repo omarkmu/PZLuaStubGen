@@ -7,7 +7,7 @@ import { convertRosettaOverloads } from './convert-rosetta-overloads'
 export const convertRosettaTable = (table: RosettaTable): AnalyzedTable => {
     return {
         name: table.name,
-        generated: table.tags?.includes('Local'),
+        local: table.tags?.includes('Local'),
         staticFields: convertRosettaFields(table.staticFields),
         functions: convertRosettaFunctions(table.staticMethods),
         overloads: convertRosettaOverloads(table.overloads),

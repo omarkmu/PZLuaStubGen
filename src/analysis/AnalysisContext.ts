@@ -1687,7 +1687,7 @@ export class AnalysisContext {
             name: cls.name,
             extends: cls.base,
             deriveName: cls.deriveName,
-            generated: cls.generated,
+            local: cls.generated,
             fields,
             literalFields,
             staticFields,

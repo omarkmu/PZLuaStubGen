@@ -218,7 +218,7 @@ export interface AnalyzedField {
 
 export interface AnalyzedTable {
     name: string
-    generated?: boolean
+    local?: boolean
 
     staticFields: AnalyzedField[]
     functions: AnalyzedFunction[]
@@ -229,7 +229,7 @@ export interface AnalyzedClass {
     name: string
     extends?: string
     deriveName?: string
-    generated?: boolean
+    local?: boolean
 
     fields: AnalyzedField[]
     literalFields: TableField[]

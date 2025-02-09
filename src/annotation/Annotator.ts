@@ -672,8 +672,7 @@ export class Annotator extends BaseReporter {
                 // definition
                 out.push('\n')
 
-                if (cls.generated) {
-                    // generated classes aren't real globals
+                if (cls.local) {
                     out.push('local ')
                 }
 
@@ -1143,7 +1142,7 @@ export class Annotator extends BaseReporter {
                 }
 
                 out.push('\n')
-                if (table.generated) {
+                if (table.local) {
                     out.push('local ')
                 }
 
