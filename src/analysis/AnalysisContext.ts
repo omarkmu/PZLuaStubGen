@@ -565,12 +565,8 @@ export class AnalysisContext {
 
         // get lhs types
         const lhsTypes = [...this.resolveTypes({ expression: lhs })]
-        if (lhsTypes.length === 0) {
-            return
-        }
-
         if (lhsTypes.find((x) => !x.startsWith('@table'))) {
-            // unknown lhs → don't treat as instance
+            // non-table lhs → don't treat as instance
             return
         }
 
