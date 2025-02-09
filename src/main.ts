@@ -67,6 +67,15 @@ const annotateCommand = (yargs: yargs.Argv) => {
                 alias: 'k',
                 desc: 'Whether to generate the kahlua stub.',
             })
+            .option('inject', {
+                type: 'boolean',
+                hidden: true,
+                default: true,
+            })
+            .option('no-inject', {
+                type: 'boolean',
+                desc: 'Disallow injecting additional data from Rosetta',
+            })
             .option('rosetta', {
                 type: 'string',
                 alias: 'r',

@@ -3,6 +3,7 @@ import { BaseReporter } from '../base'
 import { AnnotateArgs } from './types'
 
 import {
+    AnalyzedClass,
     AnalyzedFunction,
     AnalyzedModule,
     AnalyzedParameter,
@@ -22,7 +23,13 @@ import {
     RosettaOperator,
     RosettaOverload,
 } from '../rosetta'
-import { convertRosettaFile } from '../helpers'
+import {
+    convertRosettaClass,
+    convertRosettaFields,
+    convertRosettaFile,
+    convertRosettaFunction,
+    convertRosettaFunctions,
+} from '../helpers'
 
 const PREFIX = '---@meta'
 
@@ -35,6 +42,7 @@ export class Annotator extends BaseReporter {
     protected useRosetta: boolean
     protected alphabetize: boolean
     protected includeKahlua: boolean
+    protected noInject: boolean
     protected exclude: Set<string>
     protected excludeFields: Set<string>
 
@@ -44,6 +52,7 @@ export class Annotator extends BaseReporter {
         this.outDirectory = path.normalize(args.outputDirectory)
         this.alphabetize = args.alphabetize
         this.includeKahlua = args.includeKahlua
+        this.noInject = !args.inject
         this.exclude = new Set(args.exclude)
 
         this.useRosetta = args.rosetta !== undefined
@@ -133,6 +142,73 @@ export class Annotator extends BaseReporter {
         return modules
     }
 
+    protected augmentClass(
+        cls: AnalyzedClass,
+        rosettaFile: RosettaFile,
+    ): AnalyzedClass {
+        const rosettaClass = rosettaFile.classes[cls.name]
+        if (!rosettaClass) {
+            return cls
+        }
+
+        const fieldSet = new Set<string>(cls.fields.map((x) => x.name))
+        cls.fields.push(
+            ...convertRosettaFields(rosettaClass.fields ?? {}).filter(
+                (x) => !fieldSet.has(x.name),
+            ),
+        )
+
+        const staticFieldSet = new Set<string>(cls.fields.map((x) => x.name))
+        cls.staticFields.push(
+            ...convertRosettaFields(rosettaClass.staticFields ?? {}).filter(
+                (x) => !staticFieldSet.has(x.name),
+            ),
+        )
+
+        const funcSet = new Set<string>(cls.functions.map((x) => x.name))
+        cls.functions.push(
+            ...convertRosettaFunctions(rosettaClass.staticMethods ?? {}).filter(
+                (x) => !funcSet.has(x.name),
+            ),
+        )
+
+        const methodSet = new Set<string>(cls.methods.map((x) => x.name))
+        cls.methods.push(
+            ...convertRosettaFunctions(rosettaClass.methods ?? {}, true).filter(
+                (x) => !methodSet.has(x.name),
+            ),
+        )
+
+        return cls
+    }
+
+    protected augmentModule(mod: AnalyzedModule): AnalyzedModule {
+        const rosettaFile = this.rosetta.files[mod.id]
+        if (!rosettaFile) {
+            return mod
+        }
+
+        for (const cls of mod.classes) {
+            this.augmentClass(cls, rosettaFile)
+        }
+
+        const clsSet = new Set<string>(mod.classes.map((x) => x.name))
+        mod.classes.push(
+            ...Object.values(rosettaFile.classes)
+                .filter((x) => !clsSet.has(x.name))
+                .map((x) => convertRosettaClass(x)),
+        )
+
+        const funcSet = new Set<string>(mod.functions.map((x) => x.name))
+        mod.functions.push(
+            ...Object.values(rosettaFile.functions)
+                .filter((x) => !funcSet.has(x.name))
+                .map((x) => convertRosettaFunction(x)),
+        )
+
+        return mod
+    }
+
     protected async getKahluaModule(): Promise<AnalyzedModule | undefined> {
         const kahluaDataPath = path.join(__dirname, '../../__kahlua.yml')
         const file = await this.rosetta.loadYAML(kahluaDataPath)
@@ -150,7 +226,7 @@ export class Annotator extends BaseReporter {
         // manually set `table.pairs = pairs`
         const tableCls = mod.classes.find((x) => x.name === 'table')
         if (tableCls) {
-            tableCls.setterFields.push({
+            tableCls.staticFields.push({
                 name: 'pairs',
                 types: new Set(['function']),
                 expression: {
@@ -172,6 +248,41 @@ export class Annotator extends BaseReporter {
         })
 
         const modules = await analyzer.run()
+        for (const mod of modules) {
+            const rosettaFile = this.rosetta.files[mod.id]
+            mod.classes = mod.classes.filter((x) => !this.exclude.has(x.name))
+
+            for (const cls of mod.classes) {
+                const rosettaClass = rosettaFile?.classes?.[cls.name]
+                if (this.excludeFields.has(cls.name)) {
+                    cls.fields = []
+                    cls.literalFields = []
+                    cls.setterFields = []
+                    cls.staticFields = []
+                    continue
+                }
+
+                // inject static `Type` field for derived classes
+                // skip if rosetta `Type` field is defined
+                if (cls.deriveName && !rosettaClass?.staticFields?.Type) {
+                    cls.staticFields.unshift({
+                        name: 'Type',
+                        types: new Set(),
+                        expression: {
+                            type: 'literal',
+                            luaType: 'string',
+                            literal: `"${cls.deriveName}"`,
+                        },
+                    })
+                }
+            }
+        }
+
+        if (!this.noInject) {
+            for (const mod of modules) {
+                this.augmentModule(mod)
+            }
+        }
 
         if (!this.includeKahlua) {
             return modules
@@ -471,12 +582,7 @@ export class Annotator extends BaseReporter {
     ): boolean {
         let writtenCount = 0
         for (const cls of mod.classes) {
-            if (this.exclude.has(cls.name)) {
-                continue
-            }
-
             writtenCount++
-            const excludeFields = this.excludeFields.has(cls.name)
             const rosettaClass: RosettaClass | undefined =
                 rosettaFile?.classes[cls.name]
             const tags = rosettaClass?.tags
@@ -548,30 +654,26 @@ export class Annotator extends BaseReporter {
                     : cls.fields
 
                 // fields
-                if (!excludeFields) {
-                    for (const field of sortedFields) {
-                        const rosettaField = rosettaClass?.fields?.[field.name]
+                for (const field of sortedFields) {
+                    const rosettaField = rosettaClass?.fields?.[field.name]
 
-                        writtenFields.add(field.name)
+                    writtenFields.add(field.name)
 
-                        let typeString: string
-                        let notes: string
-                        if (rosettaField) {
-                            typeString = rosettaField.type?.trim() ?? 'any'
-                            notes = rosettaField.notes?.trim() ?? ''
-                        } else {
-                            typeString = this.getTypeString(field.types)
-                            notes = ''
-                        }
-
-                        if (notes) {
-                            notes = ' ' + notes
-                        }
-
-                        out.push(
-                            `\n---@field ${field.name} ${typeString}${notes}`,
-                        )
+                    let typeString: string
+                    let notes: string
+                    if (rosettaField) {
+                        typeString = rosettaField.type?.trim() ?? 'any'
+                        notes = rosettaField.notes?.trim() ?? ''
+                    } else {
+                        typeString = this.getTypeString(field.types)
+                        notes = ''
                     }
+
+                    if (notes) {
+                        notes = ' ' + notes
+                    }
+
+                    out.push(`\n---@field ${field.name} ${typeString}${notes}`)
                 }
             }
 
@@ -588,7 +690,7 @@ export class Annotator extends BaseReporter {
 
                 if (cls.deriveName && base) {
                     out.push(`${base}:derive("${cls.deriveName}")`)
-                } else if (!excludeFields && cls.literalFields.length > 0) {
+                } else if (cls.literalFields.length > 0) {
                     out.push('{')
 
                     this.writeTableFields(
@@ -604,70 +706,57 @@ export class Annotator extends BaseReporter {
                 }
             }
 
-            // inject static `Type` field for derived classes
-            if (cls.deriveName && !excludeFields) {
-                const rosettaField = rosettaClass?.staticFields?.Type
-
-                // skip if rosetta `Type` field is defined
-                if (!rosettaField) {
-                    out.push(`\n${identName}.Type = "${cls.deriveName}"`)
-                }
-            }
-
             // static fields
-            if (!excludeFields) {
-                const statics = [...cls.staticFields, ...cls.setterFields]
-                for (const field of statics) {
-                    const rosettaField =
-                        rosettaClass?.staticFields?.[field.name]
+            const statics = [...cls.staticFields, ...cls.setterFields]
+            for (const field of statics) {
+                const rosettaField = rosettaClass?.staticFields?.[field.name]
 
-                    if (writtenFields.has(field.name)) {
-                        continue
+                if (writtenFields.has(field.name)) {
+                    continue
+                }
+
+                writtenFields.add(field.name)
+
+                let canWriteExpression = true
+                let typeString: string | undefined
+                if (rosettaField) {
+                    typeString = rosettaField.type?.trim()
+                    canWriteExpression = false
+
+                    const notes = rosettaField.notes?.trim()
+                    if (notes) {
+                        out.push('\n')
+                        out.push(`\n---${notes}`)
                     }
+                } else if (field.expression) {
+                    const prefix = this.getFunctionPrefixFromExpr(
+                        field.expression,
+                    )
 
-                    writtenFields.add(field.name)
-
-                    let canWriteExpression = true
-                    let typeString: string | undefined
-                    if (rosettaField) {
-                        typeString = rosettaField.type?.trim()
-                        canWriteExpression = false
-
-                        const notes = rosettaField.notes?.trim()
-                        if (notes) {
-                            out.push('\n')
-                            out.push(`\n---${notes}`)
-                        }
-                    } else if (field.expression) {
-                        const prefix = this.getFunctionPrefixFromExpr(
-                            field.expression,
-                        )
-
-                        if (prefix) {
-                            out.push('\n')
-                            out.push(prefix)
-                        }
-                    } else {
-                        typeString = this.getTypeString(field.types)
+                    if (prefix) {
+                        out.push('\n')
+                        out.push(prefix)
                     }
+                } else {
+                    typeString = this.getTypeString(field.types)
+                }
 
-                    out.push('\n')
-                    out.push(identName)
+                out.push('\n')
+                out.push(identName)
 
-                    if (!field.name.startsWith('[')) {
-                        out.push('.')
-                    }
+                if (!field.name.startsWith('[')) {
+                    out.push('.')
+                }
 
-                    const exprString =
-                        field.expression && canWriteExpression
-                            ? this.getExpressionString(field.expression)
-                            : 'nil'
+                const exprString =
+                    field.expression && canWriteExpression
+                        ? this.getExpressionString(field.expression)
+                        : 'nil'
 
-                    out.push(`${field.name} = ${exprString}`)
+                out.push(`${field.name} = ${exprString}`)
 
-                    if (typeString) {
-                        out.push(` ---@type ${typeString}`)
-                    }
+                if (typeString) {
+                    out.push(` ---@type ${typeString}`)
                 }
             }
 

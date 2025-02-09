@@ -25,6 +25,11 @@ export interface AnnotateArgs extends BaseReportArgs {
     includeKahlua: boolean
 
     /**
+     * Whether injection via Rosetta of data that wasn't detected in the source is enabled.
+     */
+    inject: boolean
+
+    /**
      * Classes which should be excluded from the generated stubs.
      */
     exclude?: string[]
