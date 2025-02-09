@@ -279,6 +279,7 @@ export class AnalysisContext {
                 id: id,
                 locals,
                 classes,
+                tables: [],
                 functions,
                 requires,
                 returns,

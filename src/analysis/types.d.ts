@@ -359,6 +359,7 @@ export {
     AnalyzedParameter,
     AnalyzedFunction,
     AnalyzedField,
+    AnalyzedTable,
     AnalyzedClass,
     AnalyzedRequire,
     AnalyzedReturn,

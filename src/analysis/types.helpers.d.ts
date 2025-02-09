@@ -216,6 +216,15 @@ export interface AnalyzedField {
     expression?: LuaExpression
 }
 
+export interface AnalyzedTable {
+    name: string
+    generated?: boolean
+
+    staticFields: AnalyzedField[]
+    functions: AnalyzedFunction[]
+    overloads: AnalyzedFunction[]
+}
+
 export interface AnalyzedClass {
     name: string
     extends?: string
@@ -255,6 +264,7 @@ export interface AnalyzedModule {
     locals: AnalyzedLocal[]
     functions: AnalyzedFunction[]
     classes: AnalyzedClass[]
+    tables: AnalyzedTable[]
     requires: AnalyzedRequire[]
     returns: AnalyzedReturn[]
 }

@@ -4,6 +4,7 @@ import { AnnotateArgs } from './types'
 
 import {
     AnalyzedClass,
+    AnalyzedField,
     AnalyzedFunction,
     AnalyzedModule,
     AnalyzedParameter,
@@ -18,6 +19,7 @@ import {
     Rosetta,
     RosettaClass,
     RosettaConstructor,
+    RosettaField,
     RosettaFile,
     RosettaFunction,
     RosettaOperator,
@@ -29,6 +31,7 @@ import {
     convertRosettaFile,
     convertRosettaFunction,
     convertRosettaFunctions,
+    convertRosettaTable,
 } from '../helpers'
 
 const PREFIX = '---@meta'
@@ -89,6 +92,10 @@ export class Annotator extends BaseReporter {
         }
 
         if (this.writeLocals(mod, out)) {
+            out.push('\n')
+        }
+
+        if (this.writeTables(mod, out, rosettaFile)) {
             out.push('\n')
         }
 
@@ -206,6 +213,13 @@ export class Annotator extends BaseReporter {
                 .map((x) => convertRosettaFunction(x)),
         )
 
+        const tableSet = new Set<string>(mod.tables.map((x) => x.name))
+        mod.tables.push(
+            ...Object.values(rosettaFile.tables)
+                .filter((x) => !tableSet.has(x.name))
+                .map(convertRosettaTable),
+        )
+
         return mod
     }
 
@@ -224,7 +238,7 @@ export class Annotator extends BaseReporter {
         mod.prefix = '---@meta _'
 
         // manually set `table.pairs = pairs`
-        const tableCls = mod.classes.find((x) => x.name === 'table')
+        const tableCls = mod.tables.find((x) => x.name === 'table')
         if (tableCls) {
             tableCls.staticFields.push({
                 name: 'pairs',
@@ -583,11 +597,8 @@ export class Annotator extends BaseReporter {
         let writtenCount = 0
         for (const cls of mod.classes) {
             writtenCount++
-            const rosettaClass: RosettaClass | undefined =
-                rosettaFile?.classes[cls.name]
-            const tags = rosettaClass?.tags
-                ? new Set(rosettaClass.tags)
-                : new Set()
+            const rosettaClass = rosettaFile?.classes[cls.name]
+            const tags = new Set(rosettaClass?.tags ?? [])
 
             const identName = cls.name.replaceAll('.', '_')
             const base = rosettaClass?.extends ?? cls.extends
@@ -623,27 +634,7 @@ export class Annotator extends BaseReporter {
 
                 if (!this.writeRosettaOverloads(rosettaClass?.overloads, out)) {
                     for (const overload of cls.overloads) {
-                        out.push('\n---@overload fun(')
-
-                        const params: string[] = []
-                        for (const param of overload.parameters) {
-                            params.push(
-                                `${param.name}: ${this.getTypeString(param.types)}`,
-                            )
-                        }
-
-                        out.push(params.join())
-                        out.push(')')
-
-                        const returns: string[] = []
-                        for (const ret of overload.returnTypes) {
-                            returns.push(this.getTypeString(ret))
-                        }
-
-                        if (returns.length > 0) {
-                            out.push(': ')
-                            out.push(returns.join())
-                        }
+                        this.writeOverload(overload, out)
                     }
                 }
 
@@ -709,55 +700,13 @@ export class Annotator extends BaseReporter {
             // static fields
             const statics = [...cls.staticFields, ...cls.setterFields]
             for (const field of statics) {
-                const rosettaField = rosettaClass?.staticFields?.[field.name]
-
-                if (writtenFields.has(field.name)) {
-                    continue
-                }
-
-                writtenFields.add(field.name)
-
-                let canWriteExpression = true
-                let typeString: string | undefined
-                if (rosettaField) {
-                    typeString = rosettaField.type?.trim()
-                    canWriteExpression = false
-
-                    const notes = rosettaField.notes?.trim()
-                    if (notes) {
-                        out.push('\n')
-                        out.push(`\n---${notes}`)
-                    }
-                } else if (field.expression) {
-                    const prefix = this.getFunctionPrefixFromExpr(
-                        field.expression,
-                    )
-
-                    if (prefix) {
-                        out.push('\n')
-                        out.push(prefix)
-                    }
-                } else {
-                    typeString = this.getTypeString(field.types)
-                }
-
-                out.push('\n')
-                out.push(identName)
-
-                if (!field.name.startsWith('[')) {
-                    out.push('.')
-                }
-
-                const exprString =
-                    field.expression && canWriteExpression
-                        ? this.getExpressionString(field.expression)
-                        : 'nil'
-
-                out.push(`${field.name} = ${exprString}`)
-
-                if (typeString) {
-                    out.push(` ---@type ${typeString}`)
-                }
+                this.writeStaticField(
+                    identName,
+                    field,
+                    rosettaClass?.staticFields?.[field.name],
+                    writtenFields,
+                    out,
+                )
             }
 
             // remove extra newline if there's no declaration or fields
@@ -830,26 +779,34 @@ export class Annotator extends BaseReporter {
             }
 
             const fullName = `${name}${indexer}${funcName}`
-            if (rosettaFunc) {
-                out.push('\n')
-                this.validateRosettaFunction(rosettaFunc, func, isMethod)
-                this.writeRosettaFunction(rosettaFunc, fullName, out, func)
-                continue
-            }
-
-            const prefix = this.getFunctionPrefix(
-                func.parameters,
-                func.returnTypes,
-            )
-
-            out.push('\n')
-            if (prefix) {
-                out.push(prefix)
-            }
-
-            out.push('\n')
-            out.push(this.getFunctionString(fullName, func.parameters))
+            this.writeFunction(func, fullName, isMethod, out, rosettaFunc)
         }
+    }
+
+    protected writeFunction(
+        func: AnalyzedFunction,
+        name: string,
+        isMethod: boolean,
+        out: string[],
+        rosettaFunc: RosettaFunction | RosettaConstructor | undefined,
+    ) {
+        if (out.length > 1) {
+            out.push('\n')
+        }
+
+        if (rosettaFunc) {
+            this.validateRosettaFunction(rosettaFunc, func, isMethod)
+            this.writeRosettaFunction(rosettaFunc, name, out, func)
+            return
+        }
+
+        const prefix = this.getFunctionPrefix(func.parameters, func.returnTypes)
+        if (prefix) {
+            out.push(prefix)
+        }
+
+        out.push('\n')
+        out.push(this.getFunctionString(name, func.parameters))
     }
 
     protected writeGlobalFunctions(
@@ -858,29 +815,8 @@ export class Annotator extends BaseReporter {
         rosettaFile: RosettaFile | undefined,
     ): boolean {
         for (const func of mod.functions) {
-            if (out.length > 1) {
-                out.push('\n')
-            }
-
             const rosettaFunc = rosettaFile?.functions[func.name]
-            if (rosettaFunc) {
-                const funcName = rosettaFunc.name ?? func.name
-                this.validateRosettaFunction(rosettaFunc, func, false)
-                this.writeRosettaFunction(rosettaFunc, funcName, out, func)
-                continue
-            }
-
-            const prefix = this.getFunctionPrefix(
-                func.parameters,
-                func.returnTypes,
-            )
-
-            if (prefix) {
-                out.push(prefix)
-            }
-
-            out.push('\n')
-            out.push(this.getFunctionString(func.name, func.parameters))
+            this.writeFunction(func, func.name, false, out, rosettaFunc)
         }
 
         return mod.functions.length > 0
@@ -920,6 +856,28 @@ export class Annotator extends BaseReporter {
         }
 
         return mod.locals.length > 0
+    }
+
+    protected writeOverload(overload: AnalyzedFunction, out: string[]) {
+        out.push('\n---@overload fun(')
+
+        const params: string[] = []
+        for (const param of overload.parameters) {
+            params.push(`${param.name}: ${this.getTypeString(param.types)}`)
+        }
+
+        out.push(params.join())
+        out.push(')')
+
+        const returns: string[] = []
+        for (const ret of overload.returnTypes) {
+            returns.push(this.getTypeString(ret))
+        }
+
+        if (returns.length > 0) {
+            out.push(': ')
+            out.push(returns.join())
+        }
     }
 
     protected writeRosettaOperators(
@@ -1099,6 +1057,126 @@ export class Annotator extends BaseReporter {
                 params.map((x) => x.name),
             ),
         )
+    }
+
+    protected writeStaticField(
+        name: string,
+        field: AnalyzedField,
+        rosettaField: RosettaField | undefined,
+        writtenFields: Set<string>,
+        out: string[],
+    ) {
+        if (writtenFields.has(field.name)) {
+            return
+        }
+
+        writtenFields.add(field.name)
+
+        let canWriteExpression = true
+        let typeString: string | undefined
+        if (rosettaField) {
+            typeString = rosettaField.type?.trim()
+            canWriteExpression = false
+
+            const notes = rosettaField.notes?.trim()
+            if (notes) {
+                out.push('\n')
+                out.push(`\n---${notes}`)
+            }
+        } else if (field.expression) {
+            const prefix = this.getFunctionPrefixFromExpr(field.expression)
+
+            if (prefix) {
+                out.push('\n')
+                out.push(prefix)
+            }
+        } else {
+            typeString = this.getTypeString(field.types)
+        }
+
+        out.push('\n')
+        out.push(name)
+
+        if (!field.name.startsWith('[')) {
+            out.push('.')
+        }
+
+        const exprString =
+            field.expression && canWriteExpression
+                ? this.getExpressionString(field.expression)
+                : 'nil'
+
+        out.push(`${field.name} = ${exprString}`)
+
+        if (typeString) {
+            out.push(` ---@type ${typeString}`)
+        }
+    }
+
+    protected writeTables(
+        mod: AnalyzedModule,
+        out: string[],
+        rosettaFile: RosettaFile | undefined,
+    ): boolean {
+        let writtenCount = 0
+        for (const table of mod.tables) {
+            writtenCount++
+            const rosettaTable = rosettaFile?.tables?.[table.name]
+            const tags = new Set(rosettaTable?.tags ?? [])
+
+            if (!tags.has('NoInitializer')) {
+                const notes = rosettaTable?.notes?.trim()
+                if (notes) {
+                    out.push(`\n---${notes}`)
+                }
+
+                this.writeRosettaOperators(rosettaTable?.operators, out)
+
+                if (!this.writeRosettaOverloads(rosettaTable?.overloads, out)) {
+                    for (const overload of table.overloads) {
+                        this.writeOverload(overload, out)
+                    }
+                }
+
+                if (out.length > 1) {
+                    out.push('\n')
+                }
+
+                out.push('\n')
+                if (table.generated) {
+                    out.push('local ')
+                }
+
+                out.push(table.name)
+                out.push(' = {}')
+            } else if (out.length > 1) {
+                out.push('\n')
+                out.push('\n')
+            }
+
+            const writtenFields = new Set<string>()
+            for (const field of table.staticFields) {
+                this.writeStaticField(
+                    table.name,
+                    field,
+                    rosettaTable?.staticFields?.[field.name],
+                    writtenFields,
+                    out,
+                )
+            }
+
+            for (const func of table.functions) {
+                this.writeFunction(
+                    func,
+                    `${table.name}.${func.name}`,
+                    false,
+                    out,
+                    rosettaTable?.staticMethods?.[func.name],
+                )
+            }
+        }
+
+        return writtenCount > 0
     }
 
     protected writeTableFields(

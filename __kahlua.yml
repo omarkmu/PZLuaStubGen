@@ -2,36 +2,11 @@
 version: '1.1'
 languages:
   lua:
-    classes:
-      __classmetatables:
-        tags:
-        - NoAnnotation
-      Reader:
-        tags:
-        - NoInitializer
-      InputStream:
-        tags:
-        - NoInitializer
-      Random:
-        tags:
-        - Local
-        methods:
-        - name: random
-          parameters:
-          - name: m
-            type: integer?
-          - name: "n"
-            type: integer?
-          return:
-          - type: number
-        - name: seed
-          parameters:
-          - name: value
-            type: any?
+    tables:
+      __classmetatables: {}
       string:
         tags:
         - NoInitializer
-        - NoAnnotation
         staticMethods:
         - name: trim
           parameters:
@@ -66,7 +41,6 @@ languages:
       table:
         tags:
         - NoInitializer
-        - NoAnnotation
         staticMethods:
         - name: isempty
           parameters:
@@ -90,6 +64,29 @@ languages:
               type: table
             return:
             - type: table
+    classes:
+      Reader:
+        tags:
+        - NoInitializer
+      InputStream:
+        tags:
+        - NoInitializer
+      Random:
+        tags:
+        - Local
+        methods:
+        - name: random
+          parameters:
+          - name: m
+            type: integer?
+          - name: "n"
+            type: integer?
+          return:
+          - type: number
+        - name: seed
+          parameters:
+          - name: value
+            type: any?
     functions:
     - name: serialize
       parameters:
