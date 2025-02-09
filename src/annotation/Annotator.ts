@@ -412,6 +412,10 @@ export class Annotator extends BaseReporter {
         return `function(${params}) end`
     }
 
+    protected getInlineNotes(notes: string) {
+        return notes.trim().replaceAll('\r', '').replaceAll('\n', '<br>')
+    }
+
     protected getLiteralString(
         expression: LuaLiteral,
         depth: number = 1,
@@ -621,9 +625,7 @@ export class Annotator extends BaseReporter {
                     out.push('\n---@deprecated')
                 }
 
-                if (rosettaClass?.notes) {
-                    out.push(`\n---${rosettaClass.notes}`)
-                }
+                this.writeNotes(rosettaClass?.notes, out)
 
                 out.push(`\n---@class ${cls.name}`)
                 if (base) {
@@ -654,14 +656,14 @@ export class Annotator extends BaseReporter {
                     let notes: string
                     if (rosettaField) {
                         typeString = rosettaField.type?.trim() ?? 'any'
-                        notes = rosettaField.notes?.trim() ?? ''
+                        notes = rosettaField.notes ?? ''
                     } else {
                         typeString = this.getTypeString(field.types)
                         notes = ''
                     }
 
                     if (notes) {
-                        notes = ' ' + notes
+                        notes = ' ' + this.getInlineNotes(notes)
                     }
 
                     out.push(`\n---@field ${field.name} ${typeString}${notes}`)
@@ -857,6 +859,17 @@ export class Annotator extends BaseReporter {
         return mod.locals.length > 0
     }
 
+    protected writeNotes(notes: string | undefined, out: string[]) {
+        if (!notes) {
+            return
+        }
+
+        const lines = notes.replaceAll('\r', '').trim().split('\n')
+        for (const line of lines) {
+            out.push(`\n---${line}`)
+        }
+    }
+
     protected writeOverload(overload: AnalyzedFunction, out: string[]) {
         out.push('\n---@overload fun(')
 
@@ -1006,16 +1019,14 @@ export class Annotator extends BaseReporter {
             out.push(`\n---@deprecated`)
         }
 
-        if (rosettaFunc.notes) {
-            out.push(`\n---${rosettaFunc.notes}`)
-        }
+        this.writeNotes(rosettaFunc.notes, out)
 
         const params = rosettaFunc.parameters ?? []
         for (let i = 0; i < params.length; i++) {
             const param = params[i]
             out.push(`\n---@param ${param.name} ${param.type?.trim()}`)
             if (param.notes) {
-                out.push(` ${param.notes}`)
+                out.push(` ${this.getInlineNotes(param.notes)}`)
             }
         }
 
@@ -1028,14 +1039,13 @@ export class Annotator extends BaseReporter {
 
                 out.push(`\n---@return ${ret.type.trim()}`)
 
-                let notesPrefix = '#'
                 if (ret.name) {
-                    notesPrefix = ''
                     out.push(` ${ret.name}`)
                 }
 
                 if (ret.notes) {
-                    out.push(` ${notesPrefix}${ret.notes}`)
+                    const prefix = ret.name ? '' : '#'
+                    out.push(` ${prefix}${this.getInlineNotes(ret.notes)}`)
                 }
             }
         } else {
@@ -1076,11 +1086,9 @@ export class Annotator extends BaseReporter {
         if (rosettaField) {
             typeString = rosettaField.type?.trim()
             canWriteExpression = false
-
-            const notes = rosettaField.notes?.trim()
-            if (notes) {
+            if (rosettaField.notes) {
                 out.push('\n')
-                out.push(`\n---${notes}`)
+                this.writeNotes(rosettaField.notes, out)
             }
         } else if (field.expression) {
             const prefix = this.getFunctionPrefixFromExpr(field.expression)
@@ -1124,11 +1132,7 @@ export class Annotator extends BaseReporter {
             const tags = new Set(rosettaTable?.tags ?? [])
 
             if (!tags.has('NoInitializer')) {
-                const notes = rosettaTable?.notes?.trim()
-                if (notes) {
-                    out.push(`\n---${notes}`)
-                }
-
+                this.writeNotes(rosettaTable?.notes, out)
                 this.writeRosettaOperators(rosettaTable?.operators, out)
 
                 if (!this.writeRosettaOverloads(rosettaTable?.overloads, out)) {
