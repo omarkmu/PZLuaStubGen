@@ -45,6 +45,7 @@ export class Annotator extends BaseReporter {
     protected useRosetta: boolean
     protected alphabetize: boolean
     protected includeKahlua: boolean
+    protected strictFields: boolean
     protected noInject: boolean
     protected exclude: Set<string>
     protected excludeFields: Set<string>
@@ -55,6 +56,7 @@ export class Annotator extends BaseReporter {
         this.outDirectory = path.normalize(args.outputDirectory)
         this.alphabetize = args.alphabetize
         this.includeKahlua = args.includeKahlua
+        this.strictFields = args.strictFields
         this.noInject = !args.inject
         this.exclude = new Set(args.exclude)
 
@@ -667,6 +669,10 @@ export class Annotator extends BaseReporter {
                     }
 
                     out.push(`\n---@field ${field.name} ${typeString}${notes}`)
+                }
+
+                if (rosettaClass?.mutable || !this.strictFields) {
+                    out.push('\n---@field [any] any')
                 }
             }
 

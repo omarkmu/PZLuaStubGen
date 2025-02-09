@@ -76,6 +76,15 @@ const annotateCommand = (yargs: yargs.Argv) => {
                 type: 'boolean',
                 desc: 'Disallow injecting additional data from Rosetta',
             })
+            .option('strict-fields', {
+                type: 'boolean',
+                hidden: true,
+                default: true,
+            })
+            .option('no-strict-fields', {
+                type: 'boolean',
+                desc: 'Marks classes as accepting fields of any type',
+            })
             .option('rosetta', {
                 type: 'string',
                 alias: 'r',

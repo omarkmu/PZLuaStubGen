@@ -30,6 +30,11 @@ export interface AnnotateArgs extends BaseReportArgs {
     inject: boolean
 
     /**
+     * Whether fields should be treated as strict.
+     */
+    strictFields: boolean
+
+    /**
      * Classes which should be excluded from the generated stubs.
      */
     exclude?: string[]
