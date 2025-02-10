@@ -1154,8 +1154,6 @@ export class AnalysisContext {
         info: FunctionInfo,
         identExpr: LuaMember,
     ): boolean {
-        const memberName = identExpr.member
-
         const base = identExpr.base
         if (base.type !== 'reference') {
             return false
@@ -1252,15 +1250,24 @@ export class AnalysisContext {
             return false
         }
 
-        let baseName: string
+        let name: string
+        const memberName = identExpr.member
         if (memberName === 'new' || memberName === 'getInstance') {
-            baseName = scope.localIdToName(base.id) ?? base.id
+            name = scope.localIdToName(base.id) ?? base.id
+
+            // name collision → don't emit a class annotation for the container
+            const types = this.resolveTypes({ expression: base })
+            const resolved = [...types][0]
+            if (types.size === 1 && resolved.startsWith('@table')) {
+                const containerInfo = this.getTableInfo(resolved)
+                if (containerInfo.className === name) {
+                    containerInfo.noAnnotation = true
+                }
+            }
         } else {
             const lastSlash = this.currentModule.lastIndexOf('/')
-            baseName = this.currentModule.slice(lastSlash + 1)
+            name = this.currentModule.slice(lastSlash + 1)
         }
-
-        const name = `${baseName}_Instance`
 
         tableInfo.className = name
         tableInfo.isClosureClass = true
@@ -1270,7 +1277,7 @@ export class AnalysisContext {
                 name,
                 tableId,
                 definingModule: this.currentModule,
-                base: baseClass ? `${baseClass}_Instance` : undefined,
+                base: baseClass,
                 generated: true,
             },
         })
@@ -1726,6 +1733,7 @@ export class AnalysisContext {
             extends: cls.base,
             deriveName: cls.deriveName,
             local: cls.generated,
+            noAnnotation: info.noAnnotation,
             fields,
             literalFields,
             staticFields,
@@ -2140,6 +2148,10 @@ export class AnalysisContext {
 
                     if (type.startsWith('@table')) {
                         const tableInfo = this.getTableInfo(type)
+                        if (tableInfo.noAnnotation) {
+                            return 'table'
+                        }
+
                         return tableInfo.className ?? 'table'
                     }
 

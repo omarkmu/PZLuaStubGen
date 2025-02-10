@@ -230,6 +230,7 @@ export interface AnalyzedClass {
     extends?: string
     deriveName?: string
     local?: boolean
+    noAnnotation?: boolean
 
     fields: AnalyzedField[]
     literalFields: TableField[]

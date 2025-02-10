@@ -341,6 +341,8 @@ export interface TableInfo {
      * Flag for a table which is a base Atom UI class.
      */
     isAtomUIBase?: boolean
+
+    noAnnotation?: boolean
 }
 
 export {

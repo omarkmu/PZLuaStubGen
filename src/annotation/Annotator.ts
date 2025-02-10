@@ -760,8 +760,7 @@ export class Annotator extends BaseReporter {
 
             const writtenFields = new Set<string>()
 
-            const noDeclaration =
-                tags.has('NoAnnotation') && tags.has('NoInitializer')
+            const noDeclaration = cls.noAnnotation && tags.has('NoInitializer')
 
             let wroteNewlines = false
             if (out.length > 1) {
@@ -770,7 +769,7 @@ export class Annotator extends BaseReporter {
                 wroteNewlines = true
             }
 
-            if (!tags.has('NoAnnotation')) {
+            if (!cls.noAnnotation) {
                 // class annotation
                 if (rosettaClass?.deprecated) {
                     out.push('\n---@deprecated')
