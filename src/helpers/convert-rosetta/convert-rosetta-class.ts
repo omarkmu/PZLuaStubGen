@@ -1,5 +1,5 @@
-import { AnalyzedClass } from '../analysis'
-import { RosettaClass } from '../rosetta'
+import { AnalyzedClass } from '../../analysis'
+import { RosettaClass } from '../../rosetta'
 import { convertRosettaConstructors } from './convert-rosetta-constructors'
 import { convertRosettaFields } from './convert-rosetta-fields'
 import { convertRosettaFunctions } from './convert-rosetta-functions'

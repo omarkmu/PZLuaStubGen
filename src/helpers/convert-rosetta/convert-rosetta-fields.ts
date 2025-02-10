@@ -1,5 +1,5 @@
-import { AnalyzedField } from '../analysis'
-import { RosettaField } from '../rosetta'
+import { AnalyzedField } from '../../analysis'
+import { RosettaField } from '../../rosetta'
 
 export const convertRosettaFields = (
     fields: Record<string, RosettaField> | undefined,

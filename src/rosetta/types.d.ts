@@ -28,6 +28,12 @@ export interface RosettaClass {
     tags?: string[]
 }
 
+export interface WritableRosettaClass
+    extends Omit<RosettaClass, 'methods' | 'staticMethods'> {
+    methods?: RosettaMethod[]
+    staticMethods?: RosettaMethod[]
+}
+
 export interface RosettaTable {
     name: string
     notes?: string

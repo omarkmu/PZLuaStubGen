@@ -48,4 +48,9 @@ export interface AnnotateArgs extends BaseReportArgs {
      * Whether known large definition classes should have their fields excluded.
      */
     excludeKnownDefs: boolean
+
+    /**
+     * The format to use for generating Rosetta stubs.
+     */
+    format?: 'json' | 'yml'
 }

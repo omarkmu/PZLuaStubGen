@@ -378,7 +378,9 @@ export type AnalysisItem =
 /**
  * Arguments for type analysis.
  */
-export interface AnalyzeArgs extends BaseReportArgs {}
+export interface AnalyzeArgs extends BaseReportArgs {
+    noLiteralClassFields?: boolean
+}
 
 export interface AnalysisReaderArgs extends BaseReaderArgs {
     context: AnalysisContext

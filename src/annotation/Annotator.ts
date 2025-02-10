@@ -1,4 +1,5 @@
 import path from 'path'
+import YAML from 'yaml'
 import { BaseReporter } from '../base'
 import { AnnotateArgs } from './types'
 
@@ -26,6 +27,8 @@ import {
     RosettaOverload,
 } from '../rosetta'
 import {
+    convertAnalyzedClass,
+    convertAnalyzedFunctions,
     convertRosettaClass,
     convertRosettaFields,
     convertRosettaFile,
@@ -36,6 +39,8 @@ import {
 import { log } from '../logger'
 
 const PREFIX = '---@meta'
+const SCHEMA_URL =
+    'https://raw.githubusercontent.com/asledgehammer/PZ-Rosetta-Schema/refs/heads/main/1.1.json'
 
 /**
  * Handles annotation of Lua files.
@@ -50,6 +55,7 @@ export class Annotator extends BaseReporter {
     protected noInject: boolean
     protected exclude: Set<string>
     protected excludeFields: Set<string>
+    protected rosettaFormat: 'json' | 'yml'
 
     constructor(args: AnnotateArgs) {
         super(args)
@@ -83,6 +89,47 @@ export class Annotator extends BaseReporter {
         }
 
         this.excludeFields = new Set(excludeFields)
+        this.rosettaFormat = args.format ?? 'yml'
+    }
+
+    generateRosetta(mod: AnalyzedModule): string {
+        const classes: Record<string, any> = {}
+        for (const cls of mod.classes) {
+            const converted: any = convertAnalyzedClass(cls)
+            delete converted.name
+            classes[cls.name] = converted
+        }
+
+        const luaData: any = {}
+        if (mod.classes.length > 0) {
+            luaData.classes = classes
+        }
+
+        if (mod.functions.length > 0) {
+            luaData.functions = convertAnalyzedFunctions(mod.functions)
+        }
+
+        const data: any = {}
+        const format = this.rosettaFormat
+        if (format === 'json') {
+            data.$schema = SCHEMA_URL
+        }
+
+        data.version = '1.1'
+        data.languages = { lua: luaData }
+
+        let out: string
+        if (format === 'json') {
+            out = JSON.stringify(data, undefined, 2) + '\n'
+        } else {
+            const yml = YAML.stringify(data, {
+                aliasDuplicateObjects: false,
+            })
+
+            out = `#yaml-language-server: $schema=${SCHEMA_URL}\n${yml}`
+        }
+
+        return out.replaceAll('\r', '')
     }
 
     generateStub(mod: AnalyzedModule) {
@@ -120,22 +167,13 @@ export class Annotator extends BaseReporter {
      */
     async run() {
         this.resetState()
-
-        if (this.useRosetta) {
-            const rosettaDir = this.rosetta.inputDirectory
-            log.verbose(`Loading Rosetta from '${rosettaDir}'`)
-
-            if (await this.rosetta.load()) {
-                log.verbose('Loaded Rosetta')
-            } else {
-                log.warn(`Failed to load Rosetta from '${rosettaDir}'`)
-            }
-        }
+        await this.loadRosetta()
 
         const modules = await this.getModules()
 
         const start = performance.now()
         const outDir = this.outDirectory
+
         for (const mod of modules) {
             const outFile = path.resolve(path.join(outDir, mod.id + '.lua'))
 
@@ -162,8 +200,51 @@ export class Annotator extends BaseReporter {
 
         this.reportErrors()
 
-        const resolvedOutDir = path.resolve(this.outDirectory)
+        const resolvedOutDir = path.resolve(outDir)
         log.info(`Generated stubs at '${resolvedOutDir}'`)
+
+        return modules
+    }
+
+    async runRosettaInitialization() {
+        this.resetState()
+
+        const modules = await this.getModules(true)
+
+        const start = performance.now()
+        const outDir = this.outDirectory
+
+        const suffix = this.rosettaFormat === 'json' ? '.json' : '.yml'
+        for (const mod of modules) {
+            const outFile = path.resolve(
+                path.join(outDir, this.rosettaFormat, mod.id + suffix),
+            )
+
+            let data: string
+            try {
+                data = this.generateRosetta(mod)
+            } catch (e) {
+                this.errors.push(
+                    `Failed to generate Rosetta data for file '${outFile}': ${e}`,
+                )
+
+                continue
+            }
+
+            try {
+                await this.outputFile(outFile, data)
+            } catch (e) {
+                this.errors.push(`Failed to write file '${outFile}': ${e}`)
+            }
+        }
+
+        const time = (performance.now() - start).toFixed(0)
+        log.verbose(`Finished Rosetta initialization in ${time}ms`)
+
+        this.reportErrors()
+
+        const resolvedOutDir = path.resolve(outDir)
+        log.info(`Generated Rosetta data at '${resolvedOutDir}'`)
 
         return modules
     }
@@ -272,11 +353,14 @@ export class Annotator extends BaseReporter {
         return mod
     }
 
-    protected async getModules(): Promise<AnalyzedModule[]> {
+    protected async getModules(
+        noLiteralClassFields = false,
+    ): Promise<AnalyzedModule[]> {
         const analyzer = new Analyzer({
             inputDirectory: this.inDirectory,
             subdirectories: this.subdirectories,
             errors: this.errors,
+            noLiteralClassFields,
             suppressErrors: true, // report errors at the end
         })
 
@@ -592,6 +676,21 @@ export class Annotator extends BaseReporter {
         }
 
         return expr.luaType === 'table'
+    }
+
+    protected async loadRosetta() {
+        if (!this.useRosetta) {
+            return
+        }
+
+        const rosettaDir = this.rosetta.inputDirectory
+        log.verbose(`Loading Rosetta from '${rosettaDir}'`)
+
+        if (await this.rosetta.load()) {
+            log.verbose('Loaded Rosetta')
+        } else {
+            log.warn(`Failed to load Rosetta from '${rosettaDir}'`)
+        }
     }
 
     protected validateRosettaFunction(

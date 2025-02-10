@@ -1,5 +1,5 @@
-import { AnalyzedTable } from '../analysis'
-import { RosettaTable } from '../rosetta'
+import { AnalyzedTable } from '../../analysis'
+import { RosettaTable } from '../../rosetta'
 import { convertRosettaFields } from './convert-rosetta-fields'
 import { convertRosettaFunctions } from './convert-rosetta-functions'
 import { convertRosettaOverloads } from './convert-rosetta-overloads'

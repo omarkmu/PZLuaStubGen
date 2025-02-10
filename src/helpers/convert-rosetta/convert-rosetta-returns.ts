@@ -1,4 +1,4 @@
-import { RosettaReturn } from '../rosetta'
+import { RosettaReturn } from '../../rosetta'
 
 export const convertRosettaReturns = (
     returns: RosettaReturn[] | undefined,

@@ -37,6 +37,8 @@ import { getLuaFieldKey, readLuaStringLiteral } from '../helpers'
  * Shared context for analysis of multiple Lua files.
  */
 export class AnalysisContext {
+    noLiteralClassFields = false
+
     protected nextTableIndex: number = 1
     protected nextFunctionIndex: number = 1
 
@@ -1444,7 +1446,7 @@ export class AnalysisContext {
 
         const literalKeys = new Set<string>()
 
-        if (isClassDefiner) {
+        if (isClassDefiner && !this.noLiteralClassFields) {
             for (const field of info.literalFields) {
                 let key: TableKey
                 switch (field.key.type) {

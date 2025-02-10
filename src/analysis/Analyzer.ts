@@ -18,6 +18,8 @@ export class Analyzer extends BaseReporter {
         super(args)
 
         this.context = new AnalysisContext()
+        this.context.noLiteralClassFields = args.noLiteralClassFields ?? false
+
         this.reader = new AnalysisReader({
             errors: this.errors,
             context: this.context,

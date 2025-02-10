@@ -1,5 +1,5 @@
-import { RosettaParameter } from '../rosetta'
-import { AnalyzedParameter } from '../analysis'
+import { RosettaParameter } from '../../rosetta'
+import { AnalyzedParameter } from '../../analysis'
 
 export const convertRosettaParameters = (
     params: RosettaParameter[] | undefined,

@@ -1,5 +1,5 @@
-import { AnalyzedFunction } from '../analysis'
-import { RosettaFunction } from '../rosetta'
+import { AnalyzedFunction } from '../../analysis'
+import { RosettaFunction } from '../../rosetta'
 import { convertRosettaFunction } from './convert-rosetta-function'
 
 export const convertRosettaFunctions = (

@@ -127,6 +127,44 @@ const annotateCommand = (yargs: yargs.Argv) => {
 }
 
 /**
+ * Adds the CLI options for the rosetta initialization command.
+ */
+const initRosettaCommand = (yargs: yargs.Argv) => {
+    return sharedSuffix(
+        sharedPrefix(yargs)
+            .option('output-directory', {
+                type: 'string',
+                alias: 'o',
+                required: true,
+                desc: 'The directory for output stubs',
+            })
+            .option('format', {
+                type: 'string',
+                alias: 'f',
+                default: 'yml',
+                choices: ['json', 'yml'],
+                desc: 'The format to use for generated files',
+            })
+            .option('exclude', {
+                type: 'array',
+                alias: 'e',
+                string: true,
+                desc: 'Classes to exclude from annotations',
+            })
+            .option('exclude-fields', {
+                type: 'array',
+                string: true,
+                desc: 'Classes to include without fields',
+            })
+            .option('exclude-known-defs', {
+                type: 'boolean',
+                default: true,
+                desc: 'Whether known definition classes should be included without fields',
+            }),
+    )
+}
+
+/**
  * Adds the shared CLI options for report commands.
  */
 const reportCommand = (yargs: yargs.Argv) => {
@@ -146,6 +184,13 @@ yargs(hideBin(process.argv))
         'Generates typestubs for Lua files',
         annotateCommand,
         (async (args: AnnotateArgs) => await new Annotator(args).run()) as any,
+    )
+    .command(
+        'init-rosetta',
+        'Generates default Rosetta files',
+        initRosettaCommand,
+        (async (args: AnnotateArgs) =>
+            await new Annotator(args).runRosettaInitialization()) as any,
     )
     .command(
         'report-analysis',
