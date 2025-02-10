@@ -806,6 +806,10 @@ export class AnalysisContext {
             })
         }
 
+        if (lhs?.type === 'member' || lhs?.type === 'index') {
+            this.addSeenClasses(scope, lhs.base)
+        }
+
         let fieldDefs = info.definitions.get(field)
         if (!fieldDefs) {
             fieldDefs = []
@@ -820,6 +824,38 @@ export class AnalysisContext {
             definingModule: this.currentModule,
             functionLevel: !scope.id.startsWith('@module'),
         })
+    }
+
+    protected addSeenClasses(scope: LuaScope, expression: LuaExpression) {
+        switch (expression.type) {
+            case 'literal':
+            case 'operation':
+            case 'require':
+                return
+
+            case 'index':
+            case 'member':
+                this.addSeenClasses(scope, expression.base)
+                return
+        }
+
+        const types = this.resolveTypes({ expression })
+        if (types.size !== 1) {
+            return
+        }
+
+        const resolved = [...types][0]
+        if (!resolved.startsWith('@table')) {
+            return
+        }
+
+        const info = this.getTableInfo(resolved)
+        if (info.className) {
+            scope.items.push({
+                type: 'partial',
+                seenClassId: resolved,
+            })
+        }
     }
 
     /**
