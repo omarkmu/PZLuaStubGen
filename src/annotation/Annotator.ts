@@ -616,6 +616,20 @@ export class Annotator extends BaseReporter {
         return type
     }
 
+    protected getSafeIdentifier(name: string, dunder = false) {
+        name = name.replaceAll('.', '_')
+        if (!dunder) {
+            return name
+        }
+
+        const prefix = name.slice(0, 2)
+        if (prefix.toUpperCase() !== prefix) {
+            name = name.slice(0, 1).toLowerCase() + name.slice(1)
+        }
+
+        return '__' + name
+    }
+
     protected getTableString(
         expression: LuaExpression,
         depth: number = 1,
@@ -741,7 +755,7 @@ export class Annotator extends BaseReporter {
             const rosettaClass = rosettaFile?.classes[cls.name]
             const tags = new Set(rosettaClass?.tags ?? [])
 
-            const identName = cls.name.replaceAll('.', '_')
+            const identName = this.getSafeIdentifier(cls.name, cls.local)
             const base = rosettaClass?.extends ?? cls.extends
 
             const writtenFields = new Set<string>()
