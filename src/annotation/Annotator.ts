@@ -597,6 +597,25 @@ export class Annotator extends BaseReporter {
         }
     }
 
+    protected getRosettaTypeString(
+        type: string | undefined,
+        optional: boolean | undefined,
+        nullable?: boolean,
+    ): string {
+        type ??= 'any'
+        type = type.trim()
+
+        if (nullable) {
+            type += ' | nil'
+        }
+
+        if (optional) {
+            return type.includes('|') ? `(${type})?` : `${type}?`
+        }
+
+        return type
+    }
+
     protected getTableString(
         expression: LuaExpression,
         depth: number = 1,
@@ -773,7 +792,11 @@ export class Annotator extends BaseReporter {
                     let typeString: string
                     let notes: string
                     if (rosettaField) {
-                        typeString = rosettaField.type?.trim() ?? 'any'
+                        typeString = this.getRosettaTypeString(
+                            rosettaField.type,
+                            rosettaField.nullable,
+                        )
+
                         notes = rosettaField.notes ?? ''
                     } else {
                         typeString = this.getTypeString(field.types)
@@ -1151,7 +1174,13 @@ export class Annotator extends BaseReporter {
         const params = rosettaFunc.parameters ?? []
         for (let i = 0; i < params.length; i++) {
             const param = params[i]
-            out.push(`\n---@param ${param.name} ${param.type?.trim()}`)
+            const type = this.getRosettaTypeString(
+                param.type,
+                param.optional,
+                param.nullable,
+            )
+
+            out.push(`\n---@param ${param.name} ${type}`)
             if (param.notes) {
                 out.push(` ${this.getInlineNotes(param.notes)}`)
             }
@@ -1160,11 +1189,12 @@ export class Annotator extends BaseReporter {
         const returns = (rosettaFunc as RosettaFunction).return
         if (returns) {
             for (const ret of returns) {
-                if (!ret.type) {
+                if (!ret.type && ret.nullable === undefined) {
                     continue
                 }
 
-                out.push(`\n---@return ${ret.type.trim()}`)
+                const type = this.getRosettaTypeString(ret.type, ret.nullable)
+                out.push(`\n---@return ${type}`)
 
                 if (ret.name) {
                     out.push(` ${ret.name}`)
@@ -1211,7 +1241,11 @@ export class Annotator extends BaseReporter {
         let canWriteExpression = true
         let typeString: string | undefined
         if (rosettaField) {
-            typeString = rosettaField.type?.trim()
+            typeString = this.getRosettaTypeString(
+                rosettaField.type,
+                rosettaField.nullable,
+            )
+
             canWriteExpression = false
             if (rosettaField.notes) {
                 out.push('\n')
@@ -1369,8 +1403,11 @@ export class Annotator extends BaseReporter {
             const isRef = field.value.type === 'reference'
             let typeString: string | undefined
 
-            if (rosettaField?.type) {
-                typeString = rosettaField.type.trim()
+            if (rosettaField) {
+                typeString = this.getRosettaTypeString(
+                    rosettaField.type,
+                    rosettaField.nullable,
+                )
             } else if (field.types && field.types.size > 0 && !isRef) {
                 typeString = this.getTypeString(field.types)
             }

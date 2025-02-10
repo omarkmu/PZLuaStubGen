@@ -1,4 +1,5 @@
 import { RosettaReturn } from '../../rosetta'
+import { convertRosettaTypes } from './convert-rosetta-types'
 
 export const convertRosettaReturns = (
     returns: RosettaReturn[] | undefined,
@@ -8,6 +9,6 @@ export const convertRosettaReturns = (
     }
 
     return returns.map((x): Set<string> => {
-        return x.type ? new Set([x.type]) : new Set()
+        return convertRosettaTypes(x.type, x.nullable)
     })
 }

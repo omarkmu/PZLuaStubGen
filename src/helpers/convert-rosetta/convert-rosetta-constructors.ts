@@ -1,6 +1,7 @@
 import { AnalyzedFunction } from '../../analysis'
 import { RosettaConstructor } from '../../rosetta'
 import { convertRosettaParameters } from './convert-rosetta-parameters'
+import { convertRosettaTypes } from './convert-rosetta-types'
 
 export const convertRosettaConstructors = (
     constructors: RosettaConstructor[] | undefined,
@@ -14,7 +15,7 @@ export const convertRosettaConstructors = (
         return {
             name: 'new',
             parameters: convertRosettaParameters(x.parameters),
-            returnTypes: [new Set(clsName)],
+            returnTypes: [convertRosettaTypes(clsName, false)],
             isMethod: true,
             isConstructor: true,
         }

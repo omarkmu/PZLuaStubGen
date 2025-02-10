@@ -1,5 +1,6 @@
 import { RosettaParameter } from '../../rosetta'
 import { AnalyzedParameter } from '../../analysis'
+import { convertRosettaTypes } from './convert-rosetta-types'
 
 export const convertRosettaParameters = (
     params: RosettaParameter[] | undefined,
@@ -11,7 +12,7 @@ export const convertRosettaParameters = (
     return params.map((x): AnalyzedParameter => {
         return {
             name: x.name,
-            types: new Set(x.type),
+            types: convertRosettaTypes(x.type, x.nullable || x.optional),
         }
     })
 }

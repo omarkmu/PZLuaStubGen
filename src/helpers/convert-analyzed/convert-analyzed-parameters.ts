@@ -14,7 +14,7 @@ export const convertAnalyzedParameters = (
         }
 
         if (nullable) {
-            param.nullable = true
+            param.optional = true
         }
 
         return param
