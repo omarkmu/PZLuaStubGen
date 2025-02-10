@@ -88,9 +88,7 @@ export class Analyzer extends BaseReporter {
 
                 await this.reader.readModuleInfo(identifier, filename)
             } catch (e) {
-                this.errors.push(
-                    `Failed to analyze file '${identifier}': ${e}'`,
-                )
+                this.errors.push(`Failed to analyze file '${identifier}': ${e}`)
             }
         }
 

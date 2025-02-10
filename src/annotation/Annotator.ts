@@ -144,7 +144,7 @@ export class Annotator extends BaseReporter {
                 typestub = this.generateStub(mod)
             } catch (e) {
                 this.errors.push(
-                    `Failed to generate typestub for file ${outFile}': ${e}`,
+                    `Failed to generate typestub for file '${outFile}': ${e}`,
                 )
 
                 continue
@@ -153,7 +153,7 @@ export class Annotator extends BaseReporter {
             try {
                 await this.outputFile(outFile, typestub)
             } catch (e) {
-                this.errors.push(`Failed to write file ${outFile}': ${e}`)
+                this.errors.push(`Failed to write file '${outFile}': ${e}`)
             }
         }
 

@@ -327,7 +327,7 @@ export class Resolver extends BaseReporter {
                     await this.readFile(childPath)
                 }
             } catch (e) {
-                this.errors.push(`Failed to read directory '${dirPath}': ${e}'`)
+                this.errors.push(`Failed to read directory '${dirPath}': ${e}`)
             }
         }
     }
