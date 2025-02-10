@@ -398,7 +398,11 @@ export class AnalysisContext {
                     }
 
                     const min = funcInfo.minReturns
-                    if (!min || funcInfo.returnTypes.length <= min) {
+                    if (min === undefined) {
+                        continue
+                    }
+
+                    if (funcInfo.returnTypes.length <= min) {
                         continue
                     }
 
