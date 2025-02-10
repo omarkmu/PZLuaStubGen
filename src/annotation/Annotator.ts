@@ -812,6 +812,7 @@ export class Annotator extends BaseReporter {
                         out,
                         undefined,
                         writtenFields,
+                        rosettaClass?.staticFields,
                     )
 
                     out.push('\n}')
@@ -981,14 +982,18 @@ export class Annotator extends BaseReporter {
         return mod.locals.length > 0
     }
 
-    protected writeNotes(notes: string | undefined, out: string[]) {
+    protected writeNotes(
+        notes: string | undefined,
+        out: string[],
+        tab: string = '',
+    ) {
         if (!notes) {
             return
         }
 
         const lines = notes.replaceAll('\r', '').trim().split('\n')
         for (const line of lines) {
-            out.push(`\n---${line}`)
+            out.push(`\n${tab}---${line}`)
         }
     }
 
@@ -1309,25 +1314,14 @@ export class Annotator extends BaseReporter {
         out: string[],
         depth: number = 1,
         writtenFields?: Set<string>,
+        rosettaFields?: Record<string, RosettaField>,
     ): Set<string> {
         writtenFields ??= new Set()
         const tab = '    '.repeat(depth)
 
         let nextAutoKey = 1
-        for (const field of fields) {
+        for (const [i, field] of fields.entries()) {
             let skip = false
-            const isRef = field.value.type === 'reference'
-
-            let typeString: string | undefined
-            if (field.types && field.types.size > 0 && !isRef) {
-                typeString = this.getTypeString(field.types)
-            }
-
-            let funcString: string | undefined
-            if (!typeString && field.value.type === 'literal') {
-                funcString = this.getFunctionPrefixFromExpr(field.value, depth)
-            }
-
             let keyString: string | undefined
             const key = field.key
             switch (key.type) {
@@ -1346,15 +1340,11 @@ export class Annotator extends BaseReporter {
 
                 case 'expression':
                     const exprString = this.getExpressionString(key.expression)
-                    if (!exprString) {
-                        skip = true
-                        break
-                    }
-
                     keyString = `[${exprString}]`
                     break
             }
 
+            let rosettaField: RosettaField | undefined
             if (skip) {
                 continue
             } else if (keyString) {
@@ -1362,6 +1352,7 @@ export class Annotator extends BaseReporter {
                     continue
                 }
 
+                rosettaField = rosettaFields?.[keyString]
                 writtenFields.add(keyString)
             } else {
                 const autoKey = `[${nextAutoKey}]`
@@ -1371,27 +1362,44 @@ export class Annotator extends BaseReporter {
                     continue
                 }
 
+                rosettaField = rosettaFields?.[autoKey]
                 writtenFields.add(autoKey)
+            }
+
+            const isRef = field.value.type === 'reference'
+            let typeString: string | undefined
+
+            if (rosettaField?.type) {
+                typeString = rosettaField.type.trim()
+            } else if (field.types && field.types.size > 0 && !isRef) {
+                typeString = this.getTypeString(field.types)
+            }
+
+            let funcString: string | undefined
+            if (!typeString && field.value.type === 'literal') {
+                funcString = this.getFunctionPrefixFromExpr(field.value, depth)
             }
 
             const valueString = this.getExpressionString(field.value, depth + 1)
 
             if (typeString && this.isLiteralTable(field.value)) {
-                if (out.length > 1) {
+                if (i > 0) {
                     out.push('\n')
                 }
 
-                out.push('\n')
-                out.push(tab)
-                out.push(`---@type ${typeString}`)
+                this.writeNotes(rosettaField?.notes, out, tab)
+                out.push(`\n${tab}---@type ${typeString}`)
                 typeString = undefined
             } else if (funcString) {
-                if (out.length > 1) {
+                if (i > 0) {
                     out.push('\n')
                 }
 
+                this.writeNotes(rosettaField?.notes, out, tab)
                 out.push(funcString)
                 typeString = undefined
+            } else {
+                this.writeNotes(rosettaField?.notes, out, tab)
             }
 
             out.push('\n')
