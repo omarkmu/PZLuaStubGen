@@ -44,6 +44,21 @@ interface BaseReportArgs extends BaseArgs {
      * and the output is sent to `report.json` in that directory.
      */
     outputFile?: string
+
+    /**
+     * Log level.
+     */
+    level?: string
+
+    /**
+     * If `true`, use the `verbose` log level.
+     */
+    verbose?: boolean
+
+    /**
+     * If `true`, use the `silent` log level.
+     */
+    silent?: boolean
 }
 
 /**

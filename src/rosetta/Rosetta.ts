@@ -15,13 +15,14 @@ import {
     getFileIdentifier,
     readFileContents,
 } from '../helpers'
+import { log } from '../logger'
 
 type DataReader = (text: string) => any
 
 export class Rosetta {
     readonly files: Record<string, RosettaFile>
 
-    protected inputDirectory: string
+    readonly inputDirectory: string
     protected suppressErrors: boolean
     protected loaded: boolean = false
 
@@ -147,7 +148,7 @@ export class Rosetta {
             return this.readData(id, data)
         } catch (e) {
             if (!this.suppressErrors) {
-                console.error(`Failed to read Rosetta file ${path}: ${e}`)
+                log.error(`Failed to read Rosetta file ${path}: ${e}`)
             }
         }
     }
@@ -203,7 +204,7 @@ export class Rosetta {
                 }
             } catch (e) {
                 if (!this.suppressErrors) {
-                    console.error(
+                    log.error(
                         `Failed to read Rosetta directory '${dirPath}': ${e}`,
                     )
                 }

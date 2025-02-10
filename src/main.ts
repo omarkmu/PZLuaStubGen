@@ -10,12 +10,29 @@ import { AnnotateArgs, Annotator } from './annotation'
  * Adds shared yargs options to prefix for all commands.
  */
 const sharedPrefix = (yargs: yargs.Argv) => {
-    return yargs.option('input-directory', {
-        type: 'string',
-        alias: 'i',
-        required: true,
-        desc: 'The directory for input Lua files',
-    })
+    return yargs
+        .option('level', {
+            type: 'string',
+            choices: ['error', 'warn', 'info', 'verbose', 'debug', 'silent'],
+            conflicts: ['silent', 'verbose'],
+        })
+        .option('verbose', {
+            type: 'boolean',
+            alias: 'v',
+            desc: 'Shortcut for verbose log level',
+            conflicts: ['level', 'silent'],
+        })
+        .option('silent', {
+            type: 'boolean',
+            desc: 'Shortcut for silent log level',
+            conflicts: ['level', 'verbose'],
+        })
+        .option('input-directory', {
+            type: 'string',
+            alias: 'i',
+            required: true,
+            desc: 'The directory for input Lua files',
+        })
 }
 
 /**

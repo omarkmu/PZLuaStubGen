@@ -33,6 +33,7 @@ import {
     convertRosettaFunctions,
     convertRosettaTable,
 } from '../helpers'
+import { log } from '../logger'
 
 const PREFIX = '---@meta'
 
@@ -118,13 +119,22 @@ export class Annotator extends BaseReporter {
      * Runs typestub generation.
      */
     async run() {
+        this.resetState()
+
         if (this.useRosetta) {
-            await this.rosetta.load()
+            const rosettaDir = this.rosetta.inputDirectory
+            log.verbose(`Loading Rosetta from '${rosettaDir}'`)
+
+            if (await this.rosetta.load()) {
+                log.verbose('Loaded Rosetta')
+            } else {
+                log.warn(`Failed to load Rosetta from '${rosettaDir}'`)
+            }
         }
 
-        this.resetState()
         const modules = await this.getModules()
 
+        const start = performance.now()
         const outDir = this.outDirectory
         for (const mod of modules) {
             const outFile = path.resolve(path.join(outDir, mod.id + '.lua'))
@@ -147,7 +157,14 @@ export class Annotator extends BaseReporter {
             }
         }
 
+        const time = (performance.now() - start).toFixed(0)
+        log.verbose(`Finished annotation in ${time}ms`)
+
         this.reportErrors()
+
+        const resolvedOutDir = path.resolve(this.outDirectory)
+        log.info(`Generated stubs at '${resolvedOutDir}'`)
+
         return modules
     }
 

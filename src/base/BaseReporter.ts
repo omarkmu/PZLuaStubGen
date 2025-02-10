@@ -1,6 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import { BaseReportArgs } from './types'
+import { log } from '../logger'
 
 /**
  * Base class for classes that report on information about Lua.
@@ -12,6 +13,8 @@ export abstract class BaseReporter {
     protected errors: string[]
     protected fileSet: Set<string>
     protected suppressErrors: boolean
+
+    static updatedLogLevel: boolean = false
 
     constructor(args: BaseReportArgs) {
         this.inDirectory = path.normalize(args.inputDirectory)
@@ -35,6 +38,19 @@ export abstract class BaseReporter {
             this.subdirectories = this.subdirectories.filter(
                 (x) => x && x !== '',
             )
+        }
+
+        if (BaseReporter.updatedLogLevel) {
+            return
+        }
+
+        BaseReporter.updatedLogLevel = true
+        if (args.verbose) {
+            log.level = 'verbose'
+        } else if (args.silent || args.level === 'silent') {
+            log.silent = true
+        } else {
+            log.level = args.level ?? 'info'
         }
     }
 
@@ -79,7 +95,7 @@ export abstract class BaseReporter {
 
             try {
                 await this.outputFile(outFile, json)
-                console.log(`Report generated at ${path.resolve(outFile)}`)
+                log.info(`Report generated at ${path.resolve(outFile)}`)
             } catch (e) {
                 this.errors.push(`Failed to create file '${outFile}': ${e}`)
             }
@@ -98,7 +114,7 @@ export abstract class BaseReporter {
         }
 
         for (const err of this.errors) {
-            console.error(err)
+            log.error(err)
         }
     }
 

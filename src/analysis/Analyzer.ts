@@ -5,6 +5,7 @@ import { Resolver } from '../dependency-resolution'
 import { AnalysisReader } from './AnalysisReader'
 import { AnalysisContext } from './AnalysisContext'
 import { getAliasMap } from '../helpers'
+import { log } from '../logger'
 
 /**
  * Handles analysis of module types.
@@ -28,7 +29,14 @@ export class Analyzer extends BaseReporter {
      */
     async run() {
         this.resetState()
-        const modules = await this.read(await this.getAnalysisOrder())
+
+        const order = await this.getAnalysisOrder()
+
+        const start = performance.now()
+        const modules = await this.read(order)
+
+        const time = (performance.now() - start).toFixed(0)
+        log.verbose(`Finished analysis in ${time}ms`)
 
         this.reportErrors()
         return modules
@@ -38,12 +46,10 @@ export class Analyzer extends BaseReporter {
      * Generates a report containing results of analyzing Lua files.
      */
     async generateReport() {
-        this.resetState()
-        const modules = await this.read(await this.getAnalysisOrder())
-
-        await this.outputReport({ modules })
+        const modules = await this.run()
 
         this.reportErrors()
+        await this.outputReport({ modules })
     }
 
     /**

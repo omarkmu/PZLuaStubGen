@@ -18,6 +18,7 @@ import {
     TableKey,
 } from './types'
 import { readLuaStringLiteral } from '../helpers'
+import { log } from '../logger'
 
 /**
  * Handles reading Lua files for analysis.
@@ -47,6 +48,7 @@ export class AnalysisReader extends BaseReader {
             return
         }
 
+        log.debug(`Analyzing ${identifier}`)
         this.context.setReadingModule(identifier)
 
         const scope = this.createScope(tree) as LuaModuleScope

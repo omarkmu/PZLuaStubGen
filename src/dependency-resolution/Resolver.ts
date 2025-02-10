@@ -1,5 +1,7 @@
 import fs from 'fs'
 import path from 'path'
+import { performance } from 'perf_hooks'
+import { log } from '../logger'
 import { Deque } from '@datastructures-js/deque'
 import { BaseReporter } from '../base'
 import { DependencyReader } from './DependencyReader'
@@ -35,8 +37,14 @@ export class Resolver extends BaseReporter {
      */
     async run() {
         this.resetState()
+
+        const start = performance.now()
+
         await this.readDirectories()
         const order = this.getAnalysisOrder()
+
+        const time = (performance.now() - start).toFixed(0)
+        log.verbose(`Finished dependency resolution in ${time}ms`)
 
         this.reportErrors()
         return order
@@ -46,13 +54,11 @@ export class Resolver extends BaseReporter {
      * Reports on the global reads, writes, and requires in the given directory.
      */
     async generateReport() {
-        this.resetState()
-        await this.readDirectories()
+        const order = await this.run()
 
         const globalReads = this.getAllGlobalReads()
-
         const report = this.infoMap as any
-        report.analysisOrder = this.getAnalysisOrder()
+        report.analysisOrder = order
         report.uniqueReads = globalReads.size
         report.uniqueWrites = this.getAllGlobalWrites().size
         report.neverSetReads = this.getNeverSetGlobals(globalReads).size
@@ -344,6 +350,7 @@ export class Resolver extends BaseReporter {
             if (!info) {
                 return
             }
+
             if (info.reads.size > 0) {
                 this.infoMap.reads[identifier] = info.reads
             }
