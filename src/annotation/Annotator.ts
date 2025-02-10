@@ -1240,7 +1240,7 @@ export class Annotator extends BaseReporter {
 
         let canWriteExpression = true
         let typeString: string | undefined
-        if (rosettaField) {
+        if (rosettaField?.type || rosettaField?.nullable !== undefined) {
             typeString = this.getRosettaTypeString(
                 rosettaField.type,
                 rosettaField.nullable,
@@ -1403,11 +1403,13 @@ export class Annotator extends BaseReporter {
             const isRef = field.value.type === 'reference'
             let typeString: string | undefined
 
-            if (rosettaField) {
+            let canWriteExpression = true
+            if (rosettaField?.type || rosettaField?.nullable !== undefined) {
                 typeString = this.getRosettaTypeString(
                     rosettaField.type,
                     rosettaField.nullable,
                 )
+                canWriteExpression = false
             } else if (field.types && field.types.size > 0 && !isRef) {
                 typeString = this.getTypeString(field.types)
             }
@@ -1417,8 +1419,10 @@ export class Annotator extends BaseReporter {
                 funcString = this.getFunctionPrefixFromExpr(field.value, depth)
             }
 
-            const valueString = this.getExpressionString(field.value, depth + 1)
             const isTable = this.isLiteralTable(field.value)
+            const valueString = canWriteExpression
+                ? this.getExpressionString(field.value, depth + 1)
+                : 'nil'
 
             // don't write `---@type table` when a table literal is available
             if (isTable && typeString === 'table' && valueString !== 'nil') {
