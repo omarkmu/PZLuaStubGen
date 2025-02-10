@@ -92,8 +92,8 @@ export class Rosetta {
 
                 const cls = obj as RosettaClass
                 cls.name = name
-                cls.methods = arrayToRecord(obj.methods ?? [])
-                cls.staticMethods = arrayToRecord(obj.staticMethods ?? [])
+                cls.methods = arrayToRecord(obj.methods)
+                cls.staticMethods = arrayToRecord(obj.staticMethods)
 
                 classes[name] = cls
             }
@@ -107,7 +107,7 @@ export class Rosetta {
 
                 const tab = obj as RosettaTable
                 tab.name = name
-                tab.staticFields = arrayToRecord(obj.staticFields)
+                tab.methods = arrayToRecord(obj.methods)
                 tab.staticMethods = arrayToRecord(obj.staticMethods)
 
                 tables[name] = tab

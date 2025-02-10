@@ -1193,7 +1193,7 @@ export class Annotator extends BaseReporter {
                 param.nullable,
             )
 
-            out.push(`\n---@param ${param.name} ${type}`)
+            out.push(`\n---@param ${param.name.trim()} ${type}`)
             if (param.notes) {
                 out.push(` ${this.getInlineNotes(param.notes)}`)
             }
@@ -1210,7 +1210,7 @@ export class Annotator extends BaseReporter {
                 out.push(`\n---@return ${type}`)
 
                 if (ret.name) {
-                    out.push(` ${ret.name}`)
+                    out.push(` ${ret.name.trim()}`)
                 }
 
                 if (ret.notes) {
@@ -1251,7 +1251,12 @@ export class Annotator extends BaseReporter {
 
         writtenFields.add(field.name)
 
-        let canWriteExpression = true
+        if (rosettaField?.notes) {
+            out.push('\n')
+            this.writeNotes(rosettaField.notes, out)
+        }
+
+        let hasRosettaType = false
         let typeString: string | undefined
         if (rosettaField?.type || rosettaField?.nullable !== undefined) {
             typeString = this.getRosettaTypeString(
@@ -1259,11 +1264,7 @@ export class Annotator extends BaseReporter {
                 rosettaField.nullable,
             )
 
-            canWriteExpression = false
-            if (rosettaField.notes) {
-                out.push('\n')
-                this.writeNotes(rosettaField.notes, out)
-            }
+            hasRosettaType = true
         } else if (field.expression) {
             const prefix = this.getFunctionPrefixFromExpr(field.expression)
 
@@ -1282,12 +1283,17 @@ export class Annotator extends BaseReporter {
             out.push('.')
         }
 
-        const exprString =
-            field.expression && canWriteExpression
-                ? this.getExpressionString(field.expression)
-                : 'nil'
+        let valueString: string
+        if (rosettaField?.defaultValue) {
+            valueString = rosettaField.defaultValue
+            typeString = hasRosettaType ? typeString : undefined
+        } else if (field.expression && !hasRosettaType) {
+            valueString = this.getExpressionString(field.expression)
+        } else {
+            valueString = 'nil'
+        }
 
-        out.push(`${field.name} = ${exprString}`)
+        out.push(`${field.name} = ${valueString.trim()}`)
 
         if (typeString) {
             out.push(` ---@type ${typeString}`)
@@ -1430,13 +1436,14 @@ export class Annotator extends BaseReporter {
             const isRef = field.value.type === 'reference'
             let typeString: string | undefined
 
-            let canWriteExpression = true
+            let hasRosettaType = false
             if (rosettaField?.type || rosettaField?.nullable !== undefined) {
                 typeString = this.getRosettaTypeString(
                     rosettaField.type,
                     rosettaField.nullable,
                 )
-                canWriteExpression = false
+
+                hasRosettaType = true
             } else if (field.types && field.types.size > 0 && !isRef) {
                 typeString = this.getTypeString(field.types)
             }
@@ -1447,9 +1454,16 @@ export class Annotator extends BaseReporter {
             }
 
             const isTable = this.isLiteralTable(field.value)
-            const valueString = canWriteExpression
-                ? this.getExpressionString(field.value, depth + 1)
-                : 'nil'
+
+            let valueString: string
+            if (rosettaField?.defaultValue) {
+                valueString = rosettaField.defaultValue
+                typeString = hasRosettaType ? typeString : undefined
+            } else if (!hasRosettaType) {
+                valueString = this.getExpressionString(field.value, depth + 1)
+            } else {
+                valueString = 'nil'
+            }
 
             // don't write `---@type table` when a table literal is available
             if (isTable && typeString === 'table' && valueString !== 'nil') {
@@ -1484,7 +1498,7 @@ export class Annotator extends BaseReporter {
                 out.push(' = ')
             }
 
-            out.push(valueString)
+            out.push(valueString.trim())
             out.push(',')
 
             if (typeString) {

@@ -17,6 +17,7 @@ export interface RosettaClass {
     notes?: string
     deprecated?: boolean
     mutable?: boolean
+    local?: boolean
 
     constructors?: RosettaConstructor[]
     fields?: Record<string, RosettaField>
@@ -33,6 +34,7 @@ export interface RosettaTable {
     notes?: string
     deprecated?: boolean
     mutable?: boolean
+    local?: boolean
 
     staticFields?: Record<string, RosettaField>
     methods?: Record<string, RosettaMethod>
@@ -89,6 +91,7 @@ export interface RosettaField {
     type?: string
     notes?: string
     nullable?: boolean
+    defaultValue?: string
     tags?: string[]
 }
 

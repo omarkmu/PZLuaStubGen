@@ -14,6 +14,10 @@ export const convertAnalyzedClass = (
         rosettaCls.extends = cls.extends
     }
 
+    if (cls.local) {
+        rosettaCls.local = true
+    }
+
     if (cls.constructors.length > 0) {
         rosettaCls.constructors = convertAnalyzedConstructors(cls.constructors)
     }
@@ -24,6 +28,10 @@ export const convertAnalyzedClass = (
         // use the auto-generated static `Type` field
         if (cls.deriveName) {
             delete rosettaCls.staticFields.Type
+
+            if (Object.keys(rosettaCls.staticFields).length === 0) {
+                delete rosettaCls.staticFields
+            }
         }
     }
 
@@ -57,10 +65,6 @@ export const convertAnalyzedClass = (
         rosettaCls.staticMethods.push(
             ...convertAnalyzedFunctions(cls.functionConstructors),
         )
-    }
-
-    if (cls.local) {
-        rosettaCls.tags = ['Local']
     }
 
     return rosettaCls

@@ -8,9 +8,7 @@ export const convertAnalyzedReturns = (
         const ret: RosettaReturn = {}
         const [types, nullable] = convertAnalyzedTypes(x)
 
-        if (types) {
-            ret.type = types
-        }
+        ret.type = types ?? 'any'
 
         if (nullable) {
             ret.nullable = true

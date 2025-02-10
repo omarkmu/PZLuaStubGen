@@ -9,6 +9,10 @@ export const convertAnalyzedTable = (
 ): WritableRosettaTable => {
     const rosettaTable: WritableRosettaTable = { name: table.name }
 
+    if (table.local) {
+        rosettaTable.local = true
+    }
+
     if (table.staticFields.length > 0) {
         rosettaTable.staticFields = convertAnalyzedFields(table.staticFields)
     }
@@ -23,10 +27,6 @@ export const convertAnalyzedTable = (
 
     if (table.functions.length > 0) {
         rosettaTable.staticMethods = convertAnalyzedFunctions(table.functions)
-    }
-
-    if (table.local) {
-        rosettaTable.tags = ['Local']
     }
 
     return rosettaTable

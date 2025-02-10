@@ -78,8 +78,6 @@ interface LuaReference {
     type: 'reference'
 
     id: string
-
-    parameterIndex?: number
 }
 
 interface LuaIndex {

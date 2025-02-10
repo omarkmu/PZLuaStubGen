@@ -9,7 +9,7 @@ export const convertRosettaClass = (cls: RosettaClass): AnalyzedClass => {
     return {
         name: cls.name,
         extends: cls.extends,
-        local: cls.tags?.includes('Local'),
+        local: cls.local,
         constructors: convertRosettaConstructors(cls.constructors, cls.name),
         fields: convertRosettaFields(cls.fields),
         staticFields: convertRosettaFields(cls.staticFields),
