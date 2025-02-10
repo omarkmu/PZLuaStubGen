@@ -1418,8 +1418,14 @@ export class Annotator extends BaseReporter {
             }
 
             const valueString = this.getExpressionString(field.value, depth + 1)
+            const isTable = this.isLiteralTable(field.value)
 
-            if (typeString && this.isLiteralTable(field.value)) {
+            // don't write `---@type table` when a table literal is available
+            if (isTable && typeString === 'table' && valueString !== 'nil') {
+                typeString = undefined
+            }
+
+            if (typeString && isTable) {
                 if (i > 0) {
                     out.push('\n')
                 }
