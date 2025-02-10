@@ -794,12 +794,12 @@ export class Annotator extends BaseReporter {
             let rosettaFunc: RosettaFunction | RosettaConstructor | undefined
 
             let funcName = func.name
-            if (func.name === 'new') {
-                rosettaFunc = rosettaClass?.constructor
+            if (isMethod && funcName === 'new') {
+                rosettaFunc = rosettaClass?.constructors?.[0]
             } else if (rosettaClass) {
                 rosettaFunc = isMethod
-                    ? rosettaClass.methods?.[func.name]
-                    : rosettaClass.staticMethods?.[func.name]
+                    ? rosettaClass.methods?.[funcName]
+                    : rosettaClass.staticMethods?.[funcName]
             }
 
             const fullName = `${name}${indexer}${funcName}`
