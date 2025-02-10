@@ -30,6 +30,7 @@ import {
     ResolvedRequireInfo,
     AnalyzedRequire,
     LuaMember,
+    AnalyzedTable,
 } from './types'
 import { getLuaFieldKey, readLuaStringLiteral } from '../helpers'
 
@@ -210,8 +211,18 @@ export class AnalysisContext {
             const localReferences = this.getReferences(mod)
 
             const classes: AnalyzedClass[] = []
+            const tables: AnalyzedTable[] = []
             for (const cls of mod.classes) {
-                classes.push(this.finalizeClass(cls, localReferences))
+                const [finalized, isTable] = this.finalizeClass(
+                    cls,
+                    localReferences,
+                )
+
+                if (isTable) {
+                    tables.push(finalized)
+                } else {
+                    classes.push(finalized as AnalyzedClass)
+                }
             }
 
             const requires: AnalyzedRequire[] = []
@@ -281,7 +292,7 @@ export class AnalysisContext {
                 id: id,
                 locals,
                 classes,
-                tables: [],
+                tables,
                 functions,
                 requires,
                 returns,
@@ -1261,7 +1272,7 @@ export class AnalysisContext {
             if (types.size === 1 && resolved.startsWith('@table')) {
                 const containerInfo = this.getTableInfo(resolved)
                 if (containerInfo.className === name) {
-                    containerInfo.noAnnotation = true
+                    containerInfo.emitAsTable = true
                 }
             }
         } else {
@@ -1473,8 +1484,9 @@ export class AnalysisContext {
     protected finalizeClass(
         cls: ResolvedClassInfo,
         refs: Map<string, number>,
-    ): AnalyzedClass {
+    ): [AnalyzedClass | AnalyzedTable, boolean] {
         const info = this.getTableInfo(cls.tableId)
+        const isTable = info.emitAsTable ?? false
         const isClassDefiner = cls.definingModule === this.currentModule
 
         const fields: AnalyzedField[] = []
@@ -1489,7 +1501,10 @@ export class AnalysisContext {
 
         const literalKeys = new Set<string>()
 
-        if (isClassDefiner && !this.noLiteralClassFields) {
+        const allowLiteralFields =
+            isClassDefiner && !this.noLiteralClassFields && !isTable
+
+        if (allowLiteralFields) {
             for (const field of info.literalFields) {
                 let key: TableKey
                 switch (field.key.type) {
@@ -1580,7 +1595,7 @@ export class AnalysisContext {
                 }
 
                 const func = this.finalizeFunction(id, name)
-                if (func.isConstructor) {
+                if (!isTable && func.isConstructor) {
                     const target =
                         indexer === ':' ? constructors : functionConstructors
 
@@ -1728,12 +1743,24 @@ export class AnalysisContext {
             }
         }
 
-        return {
+        if (isTable) {
+            const finalized: AnalyzedTable = {
+                name: cls.name,
+                local: cls.generated,
+                staticFields,
+                methods,
+                functions,
+                overloads,
+            }
+
+            return [finalized, true]
+        }
+
+        const finalized: AnalyzedClass = {
             name: cls.name,
             extends: cls.base,
             deriveName: cls.deriveName,
             local: cls.generated,
-            noAnnotation: info.noAnnotation,
             fields,
             literalFields,
             staticFields,
@@ -1744,6 +1771,8 @@ export class AnalysisContext {
             functionConstructors,
             overloads,
         }
+
+        return [finalized, false]
     }
 
     protected finalizeDefinitions(
@@ -2148,7 +2177,7 @@ export class AnalysisContext {
 
                     if (type.startsWith('@table')) {
                         const tableInfo = this.getTableInfo(type)
-                        if (tableInfo.noAnnotation) {
+                        if (tableInfo.emitAsTable) {
                             return 'table'
                         }
 

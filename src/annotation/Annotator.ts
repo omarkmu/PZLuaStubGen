@@ -29,6 +29,7 @@ import {
 import {
     convertAnalyzedClass,
     convertAnalyzedFunctions,
+    convertAnalyzedTable,
     convertRosettaClass,
     convertRosettaFields,
     convertRosettaFile,
@@ -100,7 +101,18 @@ export class Annotator extends BaseReporter {
             classes[cls.name] = converted
         }
 
+        const tables: Record<string, any> = {}
+        for (const table of mod.tables) {
+            const converted: any = convertAnalyzedTable(table)
+            delete converted.name
+            tables[table.name] = converted
+        }
+
         const luaData: any = {}
+        if (mod.tables.length > 0) {
+            luaData.tables = tables
+        }
+
         if (mod.classes.length > 0) {
             luaData.classes = classes
         }
@@ -754,81 +766,74 @@ export class Annotator extends BaseReporter {
             writtenCount++
             const rosettaClass = rosettaFile?.classes[cls.name]
             const tags = new Set(rosettaClass?.tags ?? [])
+            const noInitializer = tags.has('NoInitializer')
 
             const identName = this.getSafeIdentifier(cls.name, cls.local)
             const base = rosettaClass?.extends ?? cls.extends
 
             const writtenFields = new Set<string>()
 
-            const noDeclaration = cls.noAnnotation && tags.has('NoInitializer')
-
-            let wroteNewlines = false
             if (out.length > 1) {
                 out.push('\n')
                 out.push('\n')
-                wroteNewlines = true
             }
 
-            if (!cls.noAnnotation) {
-                // class annotation
-                if (rosettaClass?.deprecated) {
-                    out.push('\n---@deprecated')
-                }
+            // class annotation
+            if (rosettaClass?.deprecated) {
+                out.push('\n---@deprecated')
+            }
 
-                this.writeNotes(rosettaClass?.notes, out)
+            this.writeNotes(rosettaClass?.notes, out)
 
-                out.push(`\n---@class ${cls.name}`)
-                if (base) {
-                    out.push(` : ${base}`)
-                }
+            out.push(`\n---@class ${cls.name}`)
+            if (base) {
+                out.push(` : ${base}`)
+            }
 
-                this.writeRosettaOperators(rosettaClass?.operators, out)
+            this.writeRosettaOperators(rosettaClass?.operators, out)
 
-                if (!this.writeRosettaOverloads(rosettaClass?.overloads, out)) {
-                    for (const overload of cls.overloads) {
-                        this.writeOverload(overload, out)
-                    }
-                }
-
-                const sortedFields = this.alphabetize
-                    ? [...cls.fields].sort((a, b) =>
-                          a.name.localeCompare(b.name),
-                      )
-                    : cls.fields
-
-                // fields
-                for (const field of sortedFields) {
-                    const rosettaField = rosettaClass?.fields?.[field.name]
-
-                    writtenFields.add(field.name)
-
-                    let typeString: string
-                    let notes: string
-                    if (rosettaField) {
-                        typeString = this.getRosettaTypeString(
-                            rosettaField.type,
-                            rosettaField.nullable,
-                        )
-
-                        notes = rosettaField.notes ?? ''
-                    } else {
-                        typeString = this.getTypeString(field.types)
-                        notes = ''
-                    }
-
-                    if (notes) {
-                        notes = ' ' + this.getInlineNotes(notes)
-                    }
-
-                    out.push(`\n---@field ${field.name} ${typeString}${notes}`)
-                }
-
-                if (rosettaClass?.mutable || !this.strictFields) {
-                    out.push('\n---@field [any] any')
+            if (!this.writeRosettaOverloads(rosettaClass?.overloads, out)) {
+                for (const overload of cls.overloads) {
+                    this.writeOverload(overload, out)
                 }
             }
 
-            if (!tags.has('NoInitializer')) {
+            const sortedFields = this.alphabetize
+                ? [...cls.fields].sort((a, b) => a.name.localeCompare(b.name))
+                : cls.fields
+
+            // fields
+            for (const field of sortedFields) {
+                const rosettaField = rosettaClass?.fields?.[field.name]
+
+                writtenFields.add(field.name)
+
+                let typeString: string
+                let notes: string
+                if (rosettaField) {
+                    typeString = this.getRosettaTypeString(
+                        rosettaField.type,
+                        rosettaField.nullable,
+                    )
+
+                    notes = rosettaField.notes ?? ''
+                } else {
+                    typeString = this.getTypeString(field.types)
+                    notes = ''
+                }
+
+                if (notes) {
+                    notes = ' ' + this.getInlineNotes(notes)
+                }
+
+                out.push(`\n---@field ${field.name} ${typeString}${notes}`)
+            }
+
+            if (rosettaClass?.mutable || !this.strictFields) {
+                out.push('\n---@field [any] any')
+            }
+
+            if (!noInitializer) {
                 // definition
                 out.push('\n')
 
@@ -867,11 +872,6 @@ export class Annotator extends BaseReporter {
                     writtenFields,
                     out,
                 )
-            }
-
-            // remove extra newline if there's no declaration or fields
-            if (wroteNewlines && noDeclaration && writtenFields.size === 0) {
-                out.pop()
             }
 
             // functions
@@ -1305,6 +1305,10 @@ export class Annotator extends BaseReporter {
             const rosettaTable = rosettaFile?.tables?.[table.name]
             const tags = new Set(rosettaTable?.tags ?? [])
 
+            const identName = table.local
+                ? this.getSafeIdentifier(table.name)
+                : table.name
+
             if (!tags.has('NoInitializer')) {
                 this.writeNotes(rosettaTable?.notes, out)
                 this.writeRosettaOperators(rosettaTable?.operators, out)
@@ -1324,7 +1328,7 @@ export class Annotator extends BaseReporter {
                     out.push('local ')
                 }
 
-                out.push(table.name)
+                out.push(identName)
                 out.push(' = {}')
             } else if (out.length > 1) {
                 out.push('\n')
@@ -1345,7 +1349,17 @@ export class Annotator extends BaseReporter {
             for (const func of table.functions) {
                 this.writeFunction(
                     func,
-                    `${table.name}.${func.name}`,
+                    `${identName}.${func.name}`,
+                    false,
+                    out,
+                    rosettaTable?.staticMethods?.[func.name],
+                )
+            }
+
+            for (const func of table.methods) {
+                this.writeFunction(
+                    func,
+                    `${identName}:${func.name}`,
                     false,
                     out,
                     rosettaTable?.staticMethods?.[func.name],

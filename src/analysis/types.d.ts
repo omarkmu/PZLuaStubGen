@@ -342,7 +342,10 @@ export interface TableInfo {
      */
     isAtomUIBase?: boolean
 
-    noAnnotation?: boolean
+    /**
+     * Flag for emitting the class as a simple table without a class annotation.
+     */
+    emitAsTable?: boolean
 }
 
 export {

@@ -9,6 +9,7 @@ export const convertRosettaTable = (table: RosettaTable): AnalyzedTable => {
         name: table.name,
         local: table.tags?.includes('Local'),
         staticFields: convertRosettaFields(table.staticFields),
+        methods: convertRosettaFunctions(table.methods),
         functions: convertRosettaFunctions(table.staticMethods),
         overloads: convertRosettaOverloads(table.overloads),
     }

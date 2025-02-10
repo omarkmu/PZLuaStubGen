@@ -221,6 +221,7 @@ export interface AnalyzedTable {
     local?: boolean
 
     staticFields: AnalyzedField[]
+    methods: AnalyzedFunction[]
     functions: AnalyzedFunction[]
     overloads: AnalyzedFunction[]
 }
@@ -230,7 +231,6 @@ export interface AnalyzedClass {
     extends?: string
     deriveName?: string
     local?: boolean
-    noAnnotation?: boolean
 
     fields: AnalyzedField[]
     literalFields: TableField[]

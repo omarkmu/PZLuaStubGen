@@ -28,12 +28,6 @@ export interface RosettaClass {
     tags?: string[]
 }
 
-export interface WritableRosettaClass
-    extends Omit<RosettaClass, 'methods' | 'staticMethods'> {
-    methods?: RosettaMethod[]
-    staticMethods?: RosettaMethod[]
-}
-
 export interface RosettaTable {
     name: string
     notes?: string
@@ -41,11 +35,23 @@ export interface RosettaTable {
     mutable?: boolean
 
     staticFields?: Record<string, RosettaField>
+    methods?: Record<string, RosettaMethod>
     staticMethods?: Record<string, RosettaMethod>
     overloads?: RosettaOverload[]
     operators?: RosettaOperator[]
     tags?: string[]
 }
+
+interface HasMethodLists {
+    methods?: RosettaMethod[]
+    staticMethods?: RosettaMethod[]
+}
+
+export type WritableRosettaClass = HasMethodLists &
+    Omit<RosettaClass, 'methods' | 'staticMethods'>
+
+export type WritableRosettaTable = HasMethodLists &
+    Omit<RosettaTable, 'methods' | 'staticMethods'>
 
 export interface RosettaConstructor {
     notes?: string
