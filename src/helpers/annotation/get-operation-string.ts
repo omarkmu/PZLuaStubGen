@@ -1,6 +1,7 @@
 import { LuaOperation } from '../../analysis'
 import { getExpressionString } from './get-expression-string'
 import { includeAsIs } from './include-as-is'
+import { isTernaryOperation } from './is-ternary-operation'
 
 export const getOperationString = (
     expression: LuaOperation,
@@ -24,12 +25,14 @@ export const getOperationString = (
             let lhsString = getExpressionString(lhs, depth)
             let rhsString = rhs ? getExpressionString(rhs, depth) : undefined
 
-            if (!includeAsIs(lhs)) {
-                lhsString = `(${lhsString})`
-            }
+            if (!isTernaryOperation(expression)) {
+                if (!includeAsIs(lhs)) {
+                    lhsString = `(${lhsString})`
+                }
 
-            if (rhs && !includeAsIs(rhs)) {
-                rhsString = `(${rhsString})`
+                if (rhs && !includeAsIs(rhs)) {
+                    rhsString = `(${rhsString})`
+                }
             }
 
             if (!rhsString) {
