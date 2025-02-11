@@ -206,6 +206,7 @@ export class AnalysisContext {
     finalizeModules(): Map<string, AnalyzedModule> {
         const modules = new Map<string, AnalyzedModule>()
 
+        const clsMap = new Map<string, AnalyzedClass[]>()
         for (const [id, mod] of this.modules) {
             this.currentModule = id
             const localReferences = this.getReferences(mod)
@@ -222,6 +223,14 @@ export class AnalysisContext {
                     tables.push(finalized)
                 } else {
                     classes.push(finalized as AnalyzedClass)
+
+                    let list = clsMap.get(finalized.name)
+                    if (!list) {
+                        list = []
+                        clsMap.set(finalized.name, list)
+                    }
+
+                    list.push(finalized as AnalyzedClass)
                 }
             }
 
@@ -297,6 +306,10 @@ export class AnalysisContext {
                 requires,
                 returns,
             })
+        }
+
+        for (const clsDefs of clsMap.values()) {
+            this.finalizeClassFields(clsDefs, clsMap)
         }
 
         this.currentModule = ''
@@ -1794,6 +1807,44 @@ export class AnalysisContext {
         return [finalized, false]
     }
 
+    protected finalizeClassFields(
+        clsDefs: AnalyzedClass[],
+        clsMap: Map<string, AnalyzedClass[]>,
+    ) {
+        // remove fields with identical type in ancestor
+        for (const cls of clsDefs) {
+            if (!cls.extends) {
+                continue
+            }
+
+            const seen = new Set<string>()
+            const toRemove = new Set<string>()
+            for (const field of cls.fields) {
+                if (seen.has(field.name)) {
+                    continue
+                }
+
+                seen.add(field.name)
+
+                const ancestor = this.findMatchingAncestorField(
+                    field,
+                    cls.extends,
+                    clsMap,
+                )
+
+                if (ancestor) {
+                    toRemove.add(field.name)
+                }
+            }
+
+            if (toRemove.size === 0) {
+                continue
+            }
+
+            cls.fields = cls.fields.filter((x) => !toRemove.has(x.name))
+        }
+    }
+
     protected finalizeDefinitions(
         defs: LuaExpressionInfo[],
         refs: Map<string, number>,
@@ -2242,6 +2293,52 @@ export class AnalysisContext {
         }
 
         return finalizedTypes
+    }
+
+    protected findMatchingAncestorField(
+        field: AnalyzedField,
+        baseCls: string,
+        clsMap: Map<string, AnalyzedClass[]>,
+    ): AnalyzedField | undefined {
+        const types = field.types
+
+        let ancestorDefs = clsMap.get(baseCls)
+        while (ancestorDefs !== undefined) {
+            let base: string | undefined
+            for (const def of ancestorDefs) {
+                base ??= def.extends
+                for (const checkField of def.fields) {
+                    if (checkField.name !== field.name) {
+                        continue
+                    }
+
+                    const checkTypes = checkField.types
+                    let equal = checkTypes.size === types.size
+                    if (!equal) {
+                        continue
+                    }
+
+                    for (const type of types) {
+                        if (!checkTypes.has(type)) {
+                            equal = false
+                            break
+                        }
+                    }
+
+                    if (!equal) {
+                        continue
+                    }
+
+                    return checkField
+                }
+            }
+
+            if (base) {
+                ancestorDefs = clsMap.get(base)
+            } else {
+                break
+            }
+        }
     }
 
     protected getFieldClassName(
