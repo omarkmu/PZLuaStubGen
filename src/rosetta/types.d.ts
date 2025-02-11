@@ -1,3 +1,5 @@
+import { BaseAnnotateArgs } from '../base'
+
 export interface RosettaArgs {
     inputDirectory: string
     suppressErrors?: boolean
@@ -108,4 +110,11 @@ export interface RosettaReturn {
     type?: string
     notes?: string
     nullable?: boolean
+}
+
+export interface RosettaGenerateArgs extends BaseAnnotateArgs {
+    /**
+     * The format to use for generating Rosetta stubs.
+     */
+    format?: 'json' | 'yml'
 }

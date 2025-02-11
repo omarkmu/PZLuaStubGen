@@ -1,19 +1,11 @@
 import path from 'path'
-import YAML from 'yaml'
-import { BaseReporter } from '../base'
+import { BaseAnnotator } from '../base'
 import { AnnotateArgs } from './types'
 import { log } from '../logger'
 
-import {
-    AnalyzedClass,
-    AnalyzedField,
-    AnalyzedFunction,
-    AnalyzedModule,
-    Analyzer,
-} from '../analysis'
+import { AnalyzedField, AnalyzedFunction, AnalyzedModule } from '../analysis'
 
 import {
-    Rosetta,
     RosettaClass,
     RosettaConstructor,
     RosettaField,
@@ -24,15 +16,7 @@ import {
 } from '../rosetta'
 
 import {
-    convertAnalyzedClass,
-    convertAnalyzedFunctions,
-    convertAnalyzedTable,
-    convertRosettaClass,
-    convertRosettaFields,
     convertRosettaFile,
-    convertRosettaFunction,
-    convertRosettaFunctions,
-    convertRosettaTable,
     getExpressionString,
     getFunctionPrefix,
     getFunctionPrefixFromExpression,
@@ -48,108 +32,21 @@ import {
 } from '../helpers'
 
 const PREFIX = '---@meta'
-const SCHEMA_URL =
-    'https://raw.githubusercontent.com/asledgehammer/PZ-Rosetta-Schema/refs/heads/main/1.1.json'
 
 /**
  * Handles annotation of Lua files.
  */
-export class Annotator extends BaseReporter {
-    protected outDirectory: string
-    protected rosetta: Rosetta
-    protected useRosetta: boolean
+export class Annotator extends BaseAnnotator {
     protected alphabetize: boolean
     protected includeKahlua: boolean
     protected strictFields: boolean
-    protected noInject: boolean
-    protected exclude: Set<string>
-    protected excludeFields: Set<string>
-    protected rosettaFormat: 'json' | 'yml'
 
     constructor(args: AnnotateArgs) {
         super(args)
 
-        this.outDirectory = path.normalize(args.outputDirectory)
         this.alphabetize = args.alphabetize
         this.includeKahlua = args.includeKahlua
         this.strictFields = args.strictFields
-        this.noInject = !args.inject
-        this.exclude = new Set(args.exclude)
-
-        this.useRosetta = args.rosetta !== undefined
-        this.rosetta = new Rosetta({
-            inputDirectory: args.rosetta ?? '',
-        })
-
-        const excludeFields = args.excludeFields ?? []
-        if (args.excludeKnownDefs) {
-            excludeFields.push(
-                ...[
-                    'RecMedia',
-                    'Distributions',
-                    'ProceduralDistributions',
-                    'VehicleDistributions',
-                    'SuburbsDistributions',
-                    'ClutterTables',
-                    'BagsAndContainers',
-                    'SpecialLootSpawns',
-                ],
-            )
-        }
-
-        this.excludeFields = new Set(excludeFields)
-        this.rosettaFormat = args.format ?? 'yml'
-    }
-
-    generateRosetta(mod: AnalyzedModule): string {
-        const classes: Record<string, any> = {}
-        for (const cls of mod.classes) {
-            const converted: any = convertAnalyzedClass(cls)
-            delete converted.name
-            classes[cls.name] = converted
-        }
-
-        const tables: Record<string, any> = {}
-        for (const table of mod.tables) {
-            const converted: any = convertAnalyzedTable(table)
-            delete converted.name
-            tables[table.name] = converted
-        }
-
-        const luaData: any = {}
-        if (mod.tables.length > 0) {
-            luaData.tables = tables
-        }
-
-        if (mod.classes.length > 0) {
-            luaData.classes = classes
-        }
-
-        if (mod.functions.length > 0) {
-            luaData.functions = convertAnalyzedFunctions(mod.functions)
-        }
-
-        const data: any = {}
-        const format = this.rosettaFormat
-        if (format === 'json') {
-            data.$schema = SCHEMA_URL
-        }
-
-        data.version = '1.1'
-        data.languages = { lua: luaData }
-
-        let out: string
-        if (format === 'json') {
-            out = JSON.stringify(data, undefined, 2) + '\n'
-        } else {
-            const yml = YAML.stringify(data, {
-                aliasDuplicateObjects: false,
-            })
-
-            out = `#yaml-language-server: $schema=${SCHEMA_URL}\n${yml}`
-        }
-
-        return out.replaceAll('\r', '')
     }
 
     generateStub(mod: AnalyzedModule) {
@@ -226,129 +123,6 @@ export class Annotator extends BaseReporter {
         return modules
     }
 
-    async runRosettaInitialization() {
-        this.resetState()
-
-        const modules = await this.getModules(true)
-
-        const start = performance.now()
-        const outDir = this.outDirectory
-
-        const suffix = this.rosettaFormat === 'json' ? '.json' : '.yml'
-        for (const mod of modules) {
-            const outFile = path.resolve(
-                path.join(outDir, this.rosettaFormat, mod.id + suffix),
-            )
-
-            let data: string
-            try {
-                data = this.generateRosetta(mod)
-            } catch (e) {
-                this.errors.push(
-                    `Failed to generate Rosetta data for file '${outFile}': ${e}`,
-                )
-
-                continue
-            }
-
-            try {
-                await this.outputFile(outFile, data)
-            } catch (e) {
-                this.errors.push(`Failed to write file '${outFile}': ${e}`)
-            }
-        }
-
-        const time = (performance.now() - start).toFixed(0)
-        log.verbose(`Finished Rosetta initialization in ${time}ms`)
-
-        this.reportErrors()
-
-        const resolvedOutDir = path.resolve(outDir)
-        log.info(`Generated Rosetta data at '${resolvedOutDir}'`)
-
-        return modules
-    }
-
-    protected augmentClass(
-        cls: AnalyzedClass,
-        rosettaFile: RosettaFile,
-    ): AnalyzedClass {
-        const rosettaClass = rosettaFile.classes[cls.name]
-        if (!rosettaClass) {
-            return cls
-        }
-
-        const fieldSet = new Set<string>(cls.fields.map((x) => x.name))
-        cls.fields.push(
-            ...convertRosettaFields(rosettaClass.fields ?? {}).filter(
-                (x) => !fieldSet.has(x.name),
-            ),
-        )
-
-        const staticFieldSet = new Set<string>(
-            cls.staticFields.map((x) => x.name),
-        )
-        cls.setterFields.forEach((x) => staticFieldSet.add(x.name))
-
-        cls.staticFields.push(
-            ...convertRosettaFields(rosettaClass.staticFields ?? {}).filter(
-                (x) => !staticFieldSet.has(x.name),
-            ),
-        )
-
-        const funcSet = new Set<string>(cls.functions.map((x) => x.name))
-        cls.functionConstructors.forEach((x) => funcSet.add(x.name))
-
-        cls.functions.push(
-            ...convertRosettaFunctions(rosettaClass.staticMethods ?? {}).filter(
-                (x) => !funcSet.has(x.name),
-            ),
-        )
-
-        const methodSet = new Set<string>(cls.methods.map((x) => x.name))
-        cls.methods.push(
-            ...convertRosettaFunctions(rosettaClass.methods ?? {}, true).filter(
-                (x) => !methodSet.has(x.name),
-            ),
-        )
-
-        return cls
-    }
-
-    protected augmentModule(mod: AnalyzedModule): AnalyzedModule {
-        const rosettaFile = this.rosetta.files[mod.id]
-        if (!rosettaFile) {
-            return mod
-        }
-
-        for (const cls of mod.classes) {
-            this.augmentClass(cls, rosettaFile)
-        }
-
-        const clsSet = new Set<string>(mod.classes.map((x) => x.name))
-        mod.classes.push(
-            ...Object.values(rosettaFile.classes)
-                .filter((x) => !clsSet.has(x.name))
-                .map((x) => convertRosettaClass(x)),
-        )
-
-        const funcSet = new Set<string>(mod.functions.map((x) => x.name))
-        mod.functions.push(
-            ...Object.values(rosettaFile.functions)
-                .filter((x) => !funcSet.has(x.name))
-                .map((x) => convertRosettaFunction(x)),
-        )
-
-        const tableSet = new Set<string>(mod.tables.map((x) => x.name))
-        mod.tables.push(
-            ...Object.values(rosettaFile.tables)
-                .filter((x) => !tableSet.has(x.name))
-                .map(convertRosettaTable),
-        )
-
-        return mod
-    }
-
     protected async getKahluaModule(): Promise<AnalyzedModule | undefined> {
         const kahluaDataPath = path.join(__dirname, '../../__kahlua.yml')
         const file = await this.rosetta.loadYamlFile(kahluaDataPath)
@@ -379,66 +153,6 @@ export class Annotator extends BaseReporter {
         return mod
     }
 
-    protected async getModules(
-        isRosettaInit = false,
-    ): Promise<AnalyzedModule[]> {
-        const analyzer = new Analyzer({
-            inputDirectory: this.inDirectory,
-            subdirectories: this.subdirectories,
-            errors: this.errors,
-            isRosettaInit,
-            suppressErrors: true, // report errors at the end
-        })
-
-        const modules = await analyzer.run()
-        for (const mod of modules) {
-            const rosettaFile = this.rosetta.files[mod.id]
-            mod.classes = mod.classes.filter((x) => !this.exclude.has(x.name))
-
-            for (const cls of mod.classes) {
-                const rosettaClass = rosettaFile?.classes?.[cls.name]
-                if (this.excludeFields.has(cls.name)) {
-                    cls.fields = []
-                    cls.literalFields = []
-                    cls.setterFields = []
-                    cls.staticFields = []
-                    continue
-                }
-
-                // inject static `Type` field for derived classes
-                // skip if rosetta `Type` field is defined
-                if (cls.deriveName && !rosettaClass?.staticFields?.Type) {
-                    cls.staticFields.unshift({
-                        name: 'Type',
-                        types: new Set(),
-                        expression: {
-                            type: 'literal',
-                            luaType: 'string',
-                            literal: `"${cls.deriveName}"`,
-                        },
-                    })
-                }
-            }
-        }
-
-        if (!this.noInject) {
-            for (const mod of modules) {
-                this.augmentModule(mod)
-            }
-        }
-
-        if (!this.includeKahlua) {
-            return modules
-        }
-
-        const mod = await this.getKahluaModule()
-        if (mod) {
-            modules.push(mod)
-        }
-
-        return modules
-    }
-
     protected getSafeIdentifier(name: string, dunder = false) {
         name = name.replaceAll('.', '_')
         if (!dunder) {
@@ -453,18 +167,16 @@ export class Annotator extends BaseReporter {
         return '__' + name
     }
 
-    protected async loadRosetta() {
-        if (!this.useRosetta) {
+    protected async transformModules(modules: AnalyzedModule[]) {
+        await super.transformModules(modules)
+
+        if (!this.includeKahlua) {
             return
         }
 
-        const rosettaDir = this.rosetta.inputDirectory
-        log.verbose(`Loading Rosetta from '${rosettaDir}'`)
-
-        if (await this.rosetta.load()) {
-            log.verbose('Loaded Rosetta')
-        } else {
-            log.warn(`Failed to load Rosetta from '${rosettaDir}'`)
+        const mod = await this.getKahluaModule()
+        if (mod) {
+            modules.push(mod)
         }
     }
 
