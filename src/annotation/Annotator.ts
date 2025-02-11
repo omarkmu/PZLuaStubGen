@@ -504,8 +504,7 @@ export class Annotator extends BaseReporter {
             const writtenFields = new Set<string>()
 
             if (out.length > 1) {
-                out.push('\n')
-                out.push('\n')
+                out.push('\n\n')
             }
 
             // class annotation
@@ -1060,8 +1059,7 @@ export class Annotator extends BaseReporter {
                 out.push(identName)
                 out.push(' = {}')
             } else if (out.length > 1) {
-                out.push('\n')
-                out.push('\n')
+                out.push('\n\n')
             }
 
             const writtenFields = new Set<string>()

@@ -1499,48 +1499,65 @@ export class AnalysisContext {
         const setterFields: AnalyzedField[] = []
         const overloads: AnalyzedFunction[] = []
 
+        const literalExpressions = new Map<string, LuaExpression>()
         const literalKeys = new Set<string>()
 
         const allowLiteralFields =
             isClassDefiner && !this.isRosettaInit && !isTable
 
-        if (allowLiteralFields) {
-            for (const field of info.literalFields) {
-                let key: TableKey
-                switch (field.key.type) {
-                    case 'auto':
-                        key = field.key
-                        literalKeys.add(`[${field.key.index}]`)
+        for (const field of info.literalFields) {
+            let key: TableKey | undefined
+            let keyName: string | undefined
+            switch (field.key.type) {
+                case 'auto':
+                    key = field.key
+                    keyName = `[${field.key.index}]`
+                    break
+
+                case 'string':
+                    key = field.key
+                    keyName = key.name
+                    break
+
+                case 'literal':
+                    key = field.key
+                    keyName = `[${field.key.literal}]`
+                    break
+
+                case 'expression':
+                    if (!allowLiteralFields) {
                         break
+                    }
 
-                    case 'string':
-                        key = field.key
-                        literalKeys.add(field.key.name)
-                        break
+                    const expr = this.finalizeExpression(
+                        field.key.expression,
+                        refs,
+                    )
 
-                    case 'literal':
-                        key = field.key
-                        literalKeys.add(`[${field.key.literal}]`)
-                        break
+                    key = {
+                        type: 'expression',
+                        expression: expr,
+                    }
 
-                    case 'expression':
-                        const expr = this.finalizeExpression(
-                            field.key.expression,
-                            refs,
-                        )
+                    break
+            }
 
-                        key = {
-                            type: 'expression',
-                            expression: expr,
-                        }
+            if (!key) {
+                continue
+            }
 
-                        break
-                }
-
+            const value = this.finalizeExpression(field.value, refs)
+            if (allowLiteralFields) {
                 literalFields.push({
                     key,
-                    value: this.finalizeExpression(field.value, refs),
+                    value,
                 })
+
+                if (keyName) {
+                    literalKeys.add(keyName)
+                }
+            } else if (keyName) {
+                literalExpressions.set(keyName, value)
             }
         }
 
@@ -1644,10 +1661,12 @@ export class AnalysisContext {
                     continue
                 }
 
-                const [expression, types] = this.finalizeStaticField(
+                let [expression, types] = this.finalizeStaticField(
                     staticExprs,
                     refs,
                 )
+
+                expression ??= literalExpressions.get(name)
 
                 staticFields.push({
                     name,
