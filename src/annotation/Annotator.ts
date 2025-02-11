@@ -2,18 +2,14 @@ import path from 'path'
 import YAML from 'yaml'
 import { BaseReporter } from '../base'
 import { AnnotateArgs } from './types'
+import { log } from '../logger'
 
 import {
     AnalyzedClass,
     AnalyzedField,
     AnalyzedFunction,
     AnalyzedModule,
-    AnalyzedParameter,
     Analyzer,
-    LuaExpression,
-    LuaLiteral,
-    LuaOperation,
-    TableField,
 } from '../analysis'
 
 import {
@@ -26,6 +22,7 @@ import {
     RosettaOperator,
     RosettaOverload,
 } from '../rosetta'
+
 import {
     convertAnalyzedClass,
     convertAnalyzedFunctions,
@@ -36,8 +33,18 @@ import {
     convertRosettaFunction,
     convertRosettaFunctions,
     convertRosettaTable,
+    getExpressionString,
+    getFunctionPrefix,
+    getFunctionPrefixFromExpression,
+    getFunctionString,
+    getFunctionStringFromParamNames,
+    getInlineNotes,
+    getRosettaTypeString,
+    getTypeString,
+    isLiteralTable,
+    writeNotes,
+    writeTableFields,
 } from '../helpers'
-import { log } from '../logger'
 
 const PREFIX = '---@meta'
 const SCHEMA_URL =
@@ -425,209 +432,6 @@ export class Annotator extends BaseReporter {
         return modules
     }
 
-    protected getExpressionString(
-        expression: LuaExpression,
-        depth: number = 1,
-    ): string {
-        switch (expression.type) {
-            case 'reference':
-                return expression.id
-
-            case 'require':
-                return `require("${expression.module}")`
-
-            case 'literal':
-                return this.getLiteralString(expression, depth)
-
-            case 'index':
-                const indexBase = this.getExpressionString(expression.base)
-                const index = this.getExpressionString(expression.index)
-
-                return `${indexBase}[${index}]`
-
-            case 'member':
-                const memberBase = this.getExpressionString(expression.base)
-
-                return `${memberBase}${expression.indexer}${expression.member}`
-
-            case 'operation':
-                return this.getOperationString(expression, depth)
-        }
-    }
-
-    protected getFunctionPrefix(
-        parameters?: AnalyzedParameter[],
-        returns?: Set<string>[],
-        tabLevel: number = 0,
-    ): string | undefined {
-        const tabs = '    '.repeat(tabLevel)
-
-        const out = []
-        parameters ??= []
-        for (const param of parameters) {
-            let typeString = this.getTypeString(param.types)
-            if (typeString === 'any') {
-                continue
-            }
-
-            out.push('\n')
-            out.push(tabs)
-            out.push(`---@param ${param.name} ${typeString}`)
-        }
-
-        returns ??= []
-        for (const ret of returns) {
-            out.push('\n')
-            out.push(tabs)
-            out.push(`---@return ${this.getTypeString(ret)}`)
-        }
-
-        return out.join('')
-    }
-
-    protected getFunctionPrefixFromExpr(
-        expression: LuaExpression,
-        tabLevel: number = 0,
-    ): string | undefined {
-        if (expression.type !== 'literal') {
-            return
-        }
-
-        if (expression.luaType !== 'function') {
-            return
-        }
-
-        return this.getFunctionPrefix(
-            expression.parameters,
-            expression.returnTypes,
-            tabLevel,
-        )
-    }
-
-    protected getFunctionString(
-        name: string | undefined,
-        parameters: AnalyzedParameter[],
-    ) {
-        return this.getFunctionStringFromParamNames(
-            name,
-            parameters.map((x) => x.name),
-        )
-    }
-
-    protected getFunctionStringFromParamNames(
-        name: string | undefined,
-        parameters: string[],
-    ) {
-        const params = parameters.join(', ')
-
-        if (name) {
-            return `function ${name}(${params}) end`
-        }
-
-        return `function(${params}) end`
-    }
-
-    protected getInlineNotes(notes: string) {
-        return notes.trim().replaceAll('\r', '').replaceAll('\n', '<br>')
-    }
-
-    protected getLiteralString(
-        expression: LuaLiteral,
-        depth: number = 1,
-    ): string {
-        switch (expression.luaType) {
-            case 'nil':
-                return 'nil'
-
-            case 'string':
-                return expression.literal ?? '""'
-
-            case 'number':
-                return expression.literal ?? '0'
-
-            case 'boolean':
-                return expression.literal ?? 'false'
-
-            case 'function':
-                const params = [...(expression.parameters ?? [])]
-                if (expression.isMethod) {
-                    params.unshift({ name: 'self', types: new Set() })
-                }
-
-                return this.getFunctionString(undefined, params)
-
-            case 'table':
-                return this.getTableString(expression, depth) ?? '{}'
-        }
-    }
-
-    protected getOperationString(
-        expression: LuaOperation,
-        depth?: number,
-    ): string {
-        let lhs = expression.arguments[0]
-        let rhs = expression.arguments[1]
-
-        switch (expression.operator) {
-            case 'call':
-                const callBase = this.getExpressionString(
-                    expression.arguments[0],
-                    depth,
-                )
-
-                const args: string[] = []
-                for (let i = 1; i < expression.arguments.length; i++) {
-                    args.push(
-                        this.getExpressionString(
-                            expression.arguments[i],
-                            depth,
-                        ),
-                    )
-                }
-
-                return `${callBase}(${args.join(', ')})`
-
-            default:
-                let lhsString = this.getExpressionString(lhs, depth)
-                let rhsString = rhs
-                    ? this.getExpressionString(rhs, depth)
-                    : undefined
-
-                if (!this.includeAsIs(lhs)) {
-                    lhsString = `(${lhsString})`
-                }
-
-                if (rhs && !this.includeAsIs(rhs)) {
-                    rhsString = `(${rhsString})`
-                }
-
-                if (!rhsString) {
-                    return `${expression.operator}${lhsString}`
-                }
-
-                return `${lhsString} ${expression.operator} ${rhsString}`
-        }
-    }
-
-    protected getRosettaTypeString(
-        type: string | undefined,
-        optional: boolean | undefined,
-        nullable?: boolean,
-    ): string {
-        type ??= 'any'
-        type = type.trim()
-
-        if (nullable) {
-            type += ' | nil'
-        }
-
-        if (optional) {
-            return type.includes('|') ? `(${type})?` : `${type}?`
-        }
-
-        return type
-    }
-
     protected getSafeIdentifier(name: string, dunder = false) {
         name = name.replaceAll('.', '_')
         if (!dunder) {
@@ -640,87 +444,6 @@ export class Annotator extends BaseReporter {
         }
 
         return '__' + name
-    }
-
-    protected getTableString(
-        expression: LuaExpression,
-        depth: number = 1,
-    ): string | undefined {
-        if (expression.type !== 'literal') {
-            return
-        }
-
-        if (expression.luaType !== 'table') {
-            return
-        }
-
-        const fields = expression.fields ?? []
-        if (fields.length === 0) {
-            return '{}'
-        }
-
-        const out: string[] = ['{']
-        this.writeTableFields(fields, out, depth)
-
-        out.push('\n')
-        out.push('    '.repeat(Math.max(depth - 1, 0)))
-        out.push('}')
-
-        return out.join('')
-    }
-
-    protected getTypeString(types: Set<string>): string {
-        types = new Set(types)
-        if (types.size === 0) {
-            return 'any'
-        }
-
-        const nullable = types.delete('nil')
-        if (types.size === 0) {
-            return 'any?'
-        }
-
-        const typeString = [...types].join(' | ')
-        if (nullable) {
-            return typeString.includes('|')
-                ? `(${typeString})?`
-                : `${typeString}?`
-        }
-
-        return typeString
-    }
-
-    protected includeAsIs(expr: LuaExpression): boolean {
-        if (expr.type !== 'operation') {
-            return true
-        }
-
-        switch (expr.operator) {
-            case 'call':
-            case '..':
-            case '#':
-                return true
-
-            case '-':
-                // unary minus as-is, binary minus with parentheses
-                return expr.arguments.length === 1
-
-            case 'or':
-                // write ternary operators as-is
-                const lhs = expr.arguments[0]
-                return lhs?.type === 'operation' && lhs.operator === 'and'
-
-            default:
-                return false
-        }
-    }
-
-    protected isLiteralTable(expr: LuaExpression): boolean {
-        if (expr.type !== 'literal') {
-            return false
-        }
-
-        return expr.luaType === 'table'
     }
 
     protected async loadRosetta() {
@@ -783,7 +506,7 @@ export class Annotator extends BaseReporter {
                 out.push('\n---@deprecated')
             }
 
-            this.writeNotes(rosettaClass?.notes, out)
+            writeNotes(rosettaClass?.notes, out)
 
             out.push(`\n---@class ${cls.name}`)
             if (base) {
@@ -811,19 +534,19 @@ export class Annotator extends BaseReporter {
                 let typeString: string
                 let notes: string
                 if (rosettaField) {
-                    typeString = this.getRosettaTypeString(
+                    typeString = getRosettaTypeString(
                         rosettaField.type,
                         rosettaField.nullable,
                     )
 
                     notes = rosettaField.notes ?? ''
                 } else {
-                    typeString = this.getTypeString(field.types)
+                    typeString = getTypeString(field.types)
                     notes = ''
                 }
 
                 if (notes) {
-                    notes = ' ' + this.getInlineNotes(notes)
+                    notes = ' ' + getInlineNotes(notes)
                 }
 
                 out.push(`\n---@field ${field.name} ${typeString}${notes}`)
@@ -848,7 +571,7 @@ export class Annotator extends BaseReporter {
                 } else if (cls.literalFields.length > 0) {
                     out.push('{')
 
-                    this.writeTableFields(
+                    writeTableFields(
                         cls.literalFields,
                         out,
                         undefined,
@@ -960,13 +683,13 @@ export class Annotator extends BaseReporter {
             return
         }
 
-        const prefix = this.getFunctionPrefix(func.parameters, func.returnTypes)
+        const prefix = getFunctionPrefix(func.parameters, func.returnTypes)
         if (prefix) {
             out.push(prefix)
         }
 
         out.push('\n')
-        out.push(this.getFunctionString(name, func.parameters))
+        out.push(getFunctionString(name, func.parameters))
     }
 
     protected writeGlobalFunctions(
@@ -985,7 +708,7 @@ export class Annotator extends BaseReporter {
     protected writeLocals(mod: AnalyzedModule, out: string[]): boolean {
         for (const local of mod.locals) {
             let typeString: string | undefined
-            const prefix = this.getFunctionPrefixFromExpr(local.expression)
+            const prefix = getFunctionPrefixFromExpression(local.expression)
 
             if (out.length > 1) {
                 out.push('\n')
@@ -994,16 +717,16 @@ export class Annotator extends BaseReporter {
             if (prefix) {
                 out.push(prefix)
             } else if (local.types) {
-                typeString = this.getTypeString(local.types)
+                typeString = getTypeString(local.types)
             }
 
             // write table type annotations on the line above
-            if (typeString && this.isLiteralTable(local.expression)) {
+            if (typeString && isLiteralTable(local.expression)) {
                 out.push(`\n---@type ${typeString}`)
                 typeString = undefined
             }
 
-            const rhs = this.getExpressionString(local.expression)
+            const rhs = getExpressionString(local.expression)
             if (rhs === 'nil') {
                 out.push(`\nlocal ${local.name}`)
             } else {
@@ -1018,27 +741,12 @@ export class Annotator extends BaseReporter {
         return mod.locals.length > 0
     }
 
-    protected writeNotes(
-        notes: string | undefined,
-        out: string[],
-        tab: string = '',
-    ) {
-        if (!notes) {
-            return
-        }
-
-        const lines = notes.replaceAll('\r', '').trim().split('\n')
-        for (const line of lines) {
-            out.push(`\n${tab}---${line}`)
-        }
-    }
-
     protected writeOverload(overload: AnalyzedFunction, out: string[]) {
         out.push('\n---@overload fun(')
 
         const params: string[] = []
         for (const param of overload.parameters) {
-            params.push(`${param.name}: ${this.getTypeString(param.types)}`)
+            params.push(`${param.name}: ${getTypeString(param.types)}`)
         }
 
         out.push(params.join())
@@ -1046,7 +754,7 @@ export class Annotator extends BaseReporter {
 
         const returns: string[] = []
         for (const ret of overload.returnTypes) {
-            returns.push(this.getTypeString(ret))
+            returns.push(getTypeString(ret))
         }
 
         if (returns.length > 0) {
@@ -1127,11 +835,11 @@ export class Annotator extends BaseReporter {
             const ret = mod.returns[i]
 
             if (!ret.expression) {
-                const typeString = this.getTypeString(ret.types)
+                const typeString = getTypeString(ret.types)
                 locals.push(`\nlocal __RETURN${i}__ ---@type ${typeString}`)
                 returns.push(`__RETURN${i}__`)
             } else {
-                returns.push(this.getExpressionString(ret.expression))
+                returns.push(getExpressionString(ret.expression))
             }
         }
 
@@ -1182,12 +890,12 @@ export class Annotator extends BaseReporter {
             out.push(`\n---@deprecated`)
         }
 
-        this.writeNotes(rosettaFunc.notes, out)
+        writeNotes(rosettaFunc.notes, out)
 
         const params = rosettaFunc.parameters ?? []
         for (let i = 0; i < params.length; i++) {
             const param = params[i]
-            const type = this.getRosettaTypeString(
+            const type = getRosettaTypeString(
                 param.type,
                 param.optional,
                 param.nullable,
@@ -1195,7 +903,7 @@ export class Annotator extends BaseReporter {
 
             out.push(`\n---@param ${param.name.trim()} ${type}`)
             if (param.notes) {
-                out.push(` ${this.getInlineNotes(param.notes)}`)
+                out.push(` ${getInlineNotes(param.notes)}`)
             }
         }
 
@@ -1206,7 +914,7 @@ export class Annotator extends BaseReporter {
                     continue
                 }
 
-                const type = this.getRosettaTypeString(ret.type, ret.nullable)
+                const type = getRosettaTypeString(ret.type, ret.nullable)
                 out.push(`\n---@return ${type}`)
 
                 if (ret.name) {
@@ -1215,12 +923,12 @@ export class Annotator extends BaseReporter {
 
                 if (ret.notes) {
                     const prefix = ret.name ? '' : '#'
-                    out.push(` ${prefix}${this.getInlineNotes(ret.notes)}`)
+                    out.push(` ${prefix}${getInlineNotes(ret.notes)}`)
                 }
             }
         } else {
             for (const ret of func.returnTypes) {
-                out.push(`\n---@return ${this.getTypeString(ret)}`)
+                out.push(`\n---@return ${getTypeString(ret)}`)
             }
         }
 
@@ -1231,7 +939,7 @@ export class Annotator extends BaseReporter {
 
         out.push('\n')
         out.push(
-            this.getFunctionStringFromParamNames(
+            getFunctionStringFromParamNames(
                 name,
                 params.map((x) => x.name),
             ),
@@ -1253,27 +961,27 @@ export class Annotator extends BaseReporter {
 
         if (rosettaField?.notes) {
             out.push('\n')
-            this.writeNotes(rosettaField.notes, out)
+            writeNotes(rosettaField.notes, out)
         }
 
         let hasRosettaType = false
         let typeString: string | undefined
         if (rosettaField?.type || rosettaField?.nullable !== undefined) {
-            typeString = this.getRosettaTypeString(
+            typeString = getRosettaTypeString(
                 rosettaField.type,
                 rosettaField.nullable,
             )
 
             hasRosettaType = true
         } else if (field.expression) {
-            const prefix = this.getFunctionPrefixFromExpr(field.expression)
+            const prefix = getFunctionPrefixFromExpression(field.expression)
 
             if (prefix) {
                 out.push('\n')
                 out.push(prefix)
             }
         } else {
-            typeString = this.getTypeString(field.types)
+            typeString = getTypeString(field.types)
         }
 
         out.push('\n')
@@ -1288,7 +996,7 @@ export class Annotator extends BaseReporter {
             valueString = rosettaField.defaultValue
             typeString = hasRosettaType ? typeString : undefined
         } else if (field.expression && !hasRosettaType) {
-            valueString = this.getExpressionString(field.expression)
+            valueString = getExpressionString(field.expression)
         } else {
             valueString = 'nil'
         }
@@ -1316,7 +1024,7 @@ export class Annotator extends BaseReporter {
                 : table.name
 
             if (!tags.has('NoInitializer')) {
-                this.writeNotes(rosettaTable?.notes, out)
+                writeNotes(rosettaTable?.notes, out)
                 this.writeRosettaOperators(rosettaTable?.operators, out)
 
                 if (!this.writeRosettaOverloads(rosettaTable?.overloads, out)) {
@@ -1374,138 +1082,5 @@ export class Annotator extends BaseReporter {
         }
 
         return writtenCount > 0
-    }
-
-    protected writeTableFields(
-        fields: TableField[],
-        out: string[],
-        depth: number = 1,
-        writtenFields?: Set<string>,
-        rosettaFields?: Record<string, RosettaField>,
-    ): Set<string> {
-        writtenFields ??= new Set()
-        const tab = '    '.repeat(depth)
-
-        let nextAutoKey = 1
-        for (const [i, field] of fields.entries()) {
-            let skip = false
-            let keyString: string | undefined
-            const key = field.key
-            switch (key.type) {
-                case 'string':
-                    keyString = key.name
-                    break
-
-                case 'literal':
-                    keyString = `[${key.literal}]`
-                    if (key.name) {
-                        skip = writtenFields.has(key.name)
-                        writtenFields.add(key.name)
-                    }
-
-                    break
-
-                case 'expression':
-                    const exprString = this.getExpressionString(key.expression)
-                    keyString = `[${exprString}]`
-                    break
-            }
-
-            let rosettaField: RosettaField | undefined
-            if (skip) {
-                continue
-            } else if (keyString) {
-                if (writtenFields.has(keyString)) {
-                    continue
-                }
-
-                rosettaField = rosettaFields?.[keyString]
-                writtenFields.add(keyString)
-            } else {
-                const autoKey = `[${nextAutoKey}]`
-                nextAutoKey++
-
-                if (writtenFields.has(autoKey)) {
-                    continue
-                }
-
-                rosettaField = rosettaFields?.[autoKey]
-                writtenFields.add(autoKey)
-            }
-
-            const isRef = field.value.type === 'reference'
-            let typeString: string | undefined
-
-            let hasRosettaType = false
-            if (rosettaField?.type || rosettaField?.nullable !== undefined) {
-                typeString = this.getRosettaTypeString(
-                    rosettaField.type,
-                    rosettaField.nullable,
-                )
-
-                hasRosettaType = true
-            } else if (field.types && field.types.size > 0 && !isRef) {
-                typeString = this.getTypeString(field.types)
-            }
-
-            let funcString: string | undefined
-            if (!typeString && field.value.type === 'literal') {
-                funcString = this.getFunctionPrefixFromExpr(field.value, depth)
-            }
-
-            const isTable = this.isLiteralTable(field.value)
-
-            let valueString: string
-            if (rosettaField?.defaultValue) {
-                valueString = rosettaField.defaultValue
-                typeString = hasRosettaType ? typeString : undefined
-            } else if (!hasRosettaType) {
-                valueString = this.getExpressionString(field.value, depth + 1)
-            } else {
-                valueString = 'nil'
-            }
-
-            // don't write `---@type table` when a table literal is available
-            if (isTable && typeString === 'table' && valueString !== 'nil') {
-                typeString = undefined
-            }
-
-            if (typeString && isTable) {
-                if (i > 0) {
-                    out.push('\n')
-                }
-
-                this.writeNotes(rosettaField?.notes, out, tab)
-                out.push(`\n${tab}---@type ${typeString}`)
-                typeString = undefined
-            } else if (funcString) {
-                if (i > 0) {
-                    out.push('\n')
-                }
-
-                this.writeNotes(rosettaField?.notes, out, tab)
-                out.push(funcString)
-                typeString = undefined
-            } else {
-                this.writeNotes(rosettaField?.notes, out, tab)
-            }
-
-            out.push('\n')
-            out.push(tab)
-
-            if (keyString) {
-                out.push(keyString)
-                out.push(' = ')
-            }
-
-            out.push(valueString.trim())
-            out.push(',')
-
-            if (typeString) {
-                out.push(` ---@type ${typeString}`)
-            }
-        }
-
-        return writtenFields
     }
 }
