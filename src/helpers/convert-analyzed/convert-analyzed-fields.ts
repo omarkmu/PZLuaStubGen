@@ -1,5 +1,6 @@
 import { AnalyzedField } from '../../analysis'
 import { RosettaField } from '../../rosetta'
+import { containsLiteralTable, getExpressionString } from '../annotation'
 import { convertAnalyzedTypes } from './convert-analyzed-types'
 
 export const convertAnalyzedFields = (
@@ -10,7 +11,19 @@ export const convertAnalyzedFields = (
             const field: RosettaField = {}
             const [types, nullable] = convertAnalyzedTypes(x.types)
 
-            if (types) {
+            let hasValue = false
+            if (x.expression) {
+                hasValue = true
+                if (!containsLiteralTable(x.expression)) {
+                    field.defaultValue = getExpressionString(x.expression)
+                }
+
+                if (field.defaultValue === 'nil') {
+                    delete field.defaultValue
+                }
+            }
+
+            if (types && (!hasValue || nullable)) {
                 field.type = types
             }
 

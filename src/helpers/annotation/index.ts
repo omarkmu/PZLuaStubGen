@@ -1,3 +1,4 @@
+export { containsLiteralTable } from './contains-literal-table'
 export { getExpressionString } from './get-expression-string'
 export { getFunctionPrefix } from './get-function-prefix'
 export { getFunctionPrefixFromExpression } from './get-function-prefix-from-expression'
