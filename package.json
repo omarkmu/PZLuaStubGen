@@ -1,10 +1,11 @@
 {
+    "name": "pz-lua-stubgen",
     "main": "build/main.js",
     "version": "0.1.0",
     "scripts": {
         "build": "tsc",
-        "start": "node build/main.js annotate -i assets/lua -o out/lua",
-        "dev": "nodemon -e ts --exec \"npm run build & npm run start\""
+        "start": "node build/main.js",
+        "dev": "nodemon -e ts --exec \"npm run build & npm run start -- -i assets/lua -o out/lua -k -v --all-subdirectories\""
     },
     "dependencies": {
         "@datastructures-js/deque": "^1.0.4",

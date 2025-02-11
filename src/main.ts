@@ -18,6 +18,7 @@ const sharedPrefix = (yargs: yargs.Argv) => {
         .option('level', {
             type: 'string',
             choices: ['error', 'warn', 'info', 'verbose', 'debug', 'silent'],
+            desc: 'Log level',
             conflicts: ['silent', 'verbose'],
         })
         .option('verbose', {
@@ -172,7 +173,7 @@ const reportCommand = (yargs: yargs.Argv) => {
 yargs(hideBin(process.argv))
     .scriptName('pz-lua-stubgen')
     .command(
-        'annotate',
+        '$0',
         'Generates typestubs for Lua files',
         annotateCommand,
         (async (args: AnnotateArgs) => await new Annotator(args).run()) as any,

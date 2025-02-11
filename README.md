@@ -1,17 +1,20 @@
-# PZLuaStubGen
+# pz-lua-stubgen
 
-A command-line tool for generating Lua type annotations that are compatible with [lua-language-server](https://github.com/LuaLS/lua-language-server).
+A command-line tool for generating Lua typestubs that are compatible with [lua-language-server](https://github.com/LuaLS/lua-language-server).
 
-The generated stubs can be found in the [PZLuaStubs](https://github.com/omarkmu/PZLuaStubs) repository.
+The generated stubs can be found in the [pz-lua-stubs](https://github.com/omarkmu/pz-lua-stubs) repository.
+The type data is hosted at [pz-lua-stubdata](https://github.com/omarkmu/pz-lua-stubdata).
 
 ## Usage
 
-To generate typestubs, you can run the build script then the `annotate` command.
+The primary command of the tool generates typestubs given a Lua source directory.
 From the top-level directory:
 ```
 npm i
 npm run build
-node . annotate -i <DIRECTORY> -o <DIRECTORY>
+pz-lua-stubgen -i <DIRECTORY> -o <DIRECTORY>
 ```
 
-For information about other commands, use `node . --help`.
+On Linux, use `./pz-lua-stubgen` instead.
+
+For information about other commands or the other available options, use `pz-lua-stubgen --help`.
