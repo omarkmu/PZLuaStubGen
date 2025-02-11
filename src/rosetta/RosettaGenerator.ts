@@ -1,14 +1,16 @@
 import path from 'path'
 import YAML from 'yaml'
+import { log } from '../logger'
 import { BaseAnnotator } from '../base'
 import { AnalyzedModule } from '../analysis/types'
+import { RosettaGenerateArgs } from './types'
 import {
     convertAnalyzedClass,
     convertAnalyzedFunctions,
     convertAnalyzedTable,
+    outputFile,
+    time,
 } from '../helpers'
-import { RosettaGenerateArgs } from './types'
-import { log } from '../logger'
 
 const SCHEMA_URL =
     'https://raw.githubusercontent.com/asledgehammer/PZ-Rosetta-Schema/refs/heads/main/1.1.json'
@@ -72,41 +74,35 @@ export class RosettaGenerator extends BaseAnnotator {
     }
 
     async run() {
-        this.resetState()
-
         const modules = await this.getModules(true)
 
-        const start = performance.now()
         const outDir = this.outDirectory
-
         const suffix = this.rosettaFormat === 'json' ? '.json' : '.yml'
-        for (const mod of modules) {
-            const outFile = path.resolve(
-                path.join(outDir, this.rosettaFormat, mod.id + suffix),
-            )
 
-            let data: string
-            try {
-                data = this.generateRosetta(mod)
-            } catch (e) {
-                this.errors.push(
-                    `Failed to generate Rosetta data for file '${outFile}': ${e}`,
+        await time('Rosetta initialization', async () => {
+            for (const mod of modules) {
+                const outFile = path.resolve(
+                    path.join(outDir, this.rosettaFormat, mod.id + suffix),
                 )
 
-                continue
+                let data: string
+                try {
+                    data = this.generateRosetta(mod)
+                } catch (e) {
+                    log.error(
+                        `Failed to generate Rosetta data for file '${outFile}': ${e}`,
+                    )
+
+                    continue
+                }
+
+                try {
+                    await outputFile(outFile, data)
+                } catch (e) {
+                    log.error(`Failed to write file '${outFile}': ${e}`)
+                }
             }
-
-            try {
-                await this.outputFile(outFile, data)
-            } catch (e) {
-                this.errors.push(`Failed to write file '${outFile}': ${e}`)
-            }
-        }
-
-        const time = (performance.now() - start).toFixed(0)
-        log.verbose(`Finished Rosetta initialization in ${time}ms`)
-
-        this.reportErrors()
+        })
 
         const resolvedOutDir = path.resolve(outDir)
         log.info(`Generated Rosetta data at '${resolvedOutDir}'`)

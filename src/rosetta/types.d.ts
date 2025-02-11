@@ -2,7 +2,6 @@ import { BaseAnnotateArgs } from '../base'
 
 export interface RosettaArgs {
     inputDirectory: string
-    suppressErrors?: boolean
 }
 
 export interface RosettaFile {

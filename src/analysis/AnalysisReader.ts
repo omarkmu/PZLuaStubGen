@@ -28,8 +28,7 @@ export class AnalysisReader extends BaseReader {
     protected expressionCache: Map<ast.Node, LuaExpression>
 
     constructor(args: AnalysisReaderArgs) {
-        super(args)
-
+        super()
         this.context = args.context
         this.expressionCache = new Map()
     }

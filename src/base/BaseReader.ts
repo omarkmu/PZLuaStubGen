@@ -1,5 +1,5 @@
 import ast from 'luaparse'
-import type { BaseReaderArgs, AnyCallExpression } from './types'
+import type { AnyCallExpression } from './types'
 
 import { readFileContents, readLuaStringLiteral } from '../helpers'
 import {
@@ -10,17 +10,12 @@ import {
     LuaScope,
     NodeWithBody,
 } from '../scopes'
+import { log } from '../logger'
 
 /**
  * Handles reading information from Lua files.
  */
 export abstract class BaseReader {
-    protected errors: string[]
-
-    constructor(args: BaseReaderArgs) {
-        this.errors = args.errors ?? []
-    }
-
     /**
      * Gets potential aliases for a file identifier for requiring.
      */
@@ -206,7 +201,7 @@ export abstract class BaseReader {
                 luaVersion: '5.2', // Kahlua is closer to 5.1, but this gets around the 'break' issue in luaparse
             })
         } catch (e) {
-            this.errors.push(`Failed to parse file '${filePath}': ${e}`)
+            log.error(`Failed to parse file '${filePath}': ${e}`)
         }
     }
 
@@ -311,7 +306,7 @@ export abstract class BaseReader {
         try {
             return readFileContents(filePath)
         } catch (e) {
-            this.errors.push(`Failed to read file '${filePath}': ${e}`)
+            log.error(`Failed to read file '${filePath}': ${e}`)
             return
         }
     }

@@ -14,6 +14,7 @@ import {
     expectField,
     getFileIdentifier,
     readFileContents,
+    time,
 } from '../helpers'
 import { log } from '../logger'
 
@@ -23,18 +24,39 @@ export class Rosetta {
     readonly files: Record<string, RosettaFile>
 
     readonly inputDirectory: string
-    protected suppressErrors: boolean
     protected loaded: boolean = false
 
     constructor(args: RosettaArgs) {
         this.inputDirectory = args.inputDirectory
-        this.suppressErrors = args.suppressErrors ?? false
 
         this.files = {}
     }
 
     async load(dir?: string): Promise<boolean> {
-        return (await this.loadJSON(dir)) || (await this.loadYAML(dir))
+        const targetDir = dir ?? this.inputDirectory
+        log.verbose(`Loading Rosetta from '${targetDir}'`)
+
+        return time(
+            'loading Rosetta',
+            async () => {
+                if (await this.loadJSON(dir)) {
+                    log.verbose('Loaded Rosetta from JSON definitions')
+                    return true
+                }
+
+                if (await this.loadYAML(dir)) {
+                    log.verbose('Loaded Rosetta from YAML definitions')
+                    return true
+                }
+
+                return false
+            },
+            (result) => {
+                if (!result) {
+                    return `Failed to find Rosetta definitions in '${targetDir}'`
+                }
+            },
+        )
     }
 
     async loadJSON(dir?: string): Promise<boolean> {
@@ -147,9 +169,7 @@ export class Rosetta {
             const id = getFileIdentifier(path, basePath, extensions)
             return this.readData(id, data)
         } catch (e) {
-            if (!this.suppressErrors) {
-                log.error(`Failed to read Rosetta file ${path}: ${e}`)
-            }
+            log.error(`Failed to read Rosetta file '${path}': ${e}`)
         }
     }
 
@@ -203,11 +223,7 @@ export class Rosetta {
                     await this.loadFile(childPath, basePath, reader, extensions)
                 }
             } catch (e) {
-                if (!this.suppressErrors) {
-                    log.error(
-                        `Failed to read Rosetta directory '${dirPath}': ${e}`,
-                    )
-                }
+                log.error(`Failed to read Rosetta directory '${dirPath}': ${e}`)
             }
         }
 

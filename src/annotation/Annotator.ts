@@ -27,6 +27,8 @@ import {
     getTypeString,
     getValueString,
     isLiteralTable,
+    outputFile,
+    time,
     writeNotes,
     writeTableFields,
 } from '../helpers'
@@ -83,39 +85,33 @@ export class Annotator extends BaseAnnotator {
      * Runs typestub generation.
      */
     async run() {
-        this.resetState()
         await this.loadRosetta()
 
         const modules = await this.getModules()
-
-        const start = performance.now()
         const outDir = this.outDirectory
 
-        for (const mod of modules) {
-            const outFile = path.resolve(path.join(outDir, mod.id + '.lua'))
+        await time('annotation', async () => {
+            for (const mod of modules) {
+                const outFile = path.resolve(path.join(outDir, mod.id + '.lua'))
 
-            let typestub: string
-            try {
-                typestub = this.generateStub(mod)
-            } catch (e) {
-                this.errors.push(
-                    `Failed to generate typestub for file '${outFile}': ${e}`,
-                )
+                let typestub: string
+                try {
+                    typestub = this.generateStub(mod)
+                } catch (e) {
+                    log.error(
+                        `Failed to generate typestub for file '${outFile}': ${e}`,
+                    )
 
-                continue
+                    continue
+                }
+
+                try {
+                    await outputFile(outFile, typestub)
+                } catch (e) {
+                    log.error(`Failed to write file '${outFile}': ${e}`)
+                }
             }
-
-            try {
-                await this.outputFile(outFile, typestub)
-            } catch (e) {
-                this.errors.push(`Failed to write file '${outFile}': ${e}`)
-            }
-        }
-
-        const time = (performance.now() - start).toFixed(0)
-        log.verbose(`Finished annotation in ${time}ms`)
-
-        this.reportErrors()
+        })
 
         const resolvedOutDir = path.resolve(outDir)
         log.info(`Generated stubs at '${resolvedOutDir}'`)
@@ -123,13 +119,30 @@ export class Annotator extends BaseAnnotator {
         return modules
     }
 
+    protected checkRosettaFunction(
+        rosettaFunc: RosettaFunction | RosettaConstructor,
+        name: string | undefined,
+        func: AnalyzedFunction,
+        isMethod: boolean,
+    ) {
+        const rosettaParamCount = rosettaFunc.parameters?.length ?? 0
+        const luaParamCount = func.parameters.length
+        name ??= (rosettaFunc as RosettaFunction).name ?? func.name
+
+        if (luaParamCount !== rosettaParamCount) {
+            log.warn(
+                `Rosetta ${isMethod ? 'method' : 'function'}` +
+                    ` '${name}' parameter count doesn't match.` +
+                    ` (lua: ${luaParamCount}, rosetta: ${rosettaParamCount})`,
+            )
+        }
+    }
+
     protected async getKahluaModule(): Promise<AnalyzedModule | undefined> {
         const kahluaDataPath = path.join(__dirname, '../../__kahlua.yml')
         const file = await this.rosetta.loadYamlFile(kahluaDataPath)
         if (!file) {
-            this.errors.push(
-                `Failed to load kahlua data from ${kahluaDataPath}`,
-            )
+            log.error(`Failed to load kahlua data from ${kahluaDataPath}`)
 
             return
         }
@@ -177,24 +190,6 @@ export class Annotator extends BaseAnnotator {
         const mod = await this.getKahluaModule()
         if (mod) {
             modules.push(mod)
-        }
-    }
-
-    protected validateRosettaFunction(
-        rosettaFunc: RosettaFunction | RosettaConstructor,
-        func: AnalyzedFunction,
-        isMethod: boolean,
-    ) {
-        const rosettaParamCount = rosettaFunc.parameters?.length ?? 0
-        const luaParamCount = func.parameters.length
-        const name = (rosettaFunc as RosettaFunction).name ?? func.name
-
-        if (luaParamCount !== rosettaParamCount) {
-            throw new Error(
-                `Rosetta ${isMethod ? 'method' : 'function'}` +
-                    ` '${name}' parameter count doesn't match.` +
-                    ` (lua: ${luaParamCount}, rosetta: ${rosettaParamCount})`,
-            )
         }
     }
 
@@ -396,7 +391,7 @@ export class Annotator extends BaseAnnotator {
         }
 
         if (rosettaFunc) {
-            this.validateRosettaFunction(rosettaFunc, func, isMethod)
+            this.checkRosettaFunction(rosettaFunc, name, func, isMethod)
             this.writeRosettaFunction(rosettaFunc, name, out, func)
             return
         }

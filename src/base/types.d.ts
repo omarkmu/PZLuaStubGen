@@ -24,28 +24,6 @@ interface BaseArgs {
     allSubdirectories?: boolean
 
     /**
-     * An array to use to store errors.
-     */
-    errors?: string[]
-
-    /**
-     * If `true`, errors won't be displayed after processing.
-     */
-    suppressErrors?: boolean
-}
-
-/**
- * Base arguments for a class that reports on Lua information.
- */
-interface BaseReportArgs extends BaseArgs {
-    /**
-     * The output file for a report.
-     * If the given string does not end with `.json`, this is interpreted as a directory
-     * and the output is sent to `report.json` in that directory.
-     */
-    outputFile?: string
-
-    /**
      * Log level.
      */
     level?: string
@@ -62,11 +40,23 @@ interface BaseReportArgs extends BaseArgs {
 }
 
 /**
+ * Base arguments for a class that reports on Lua information.
+ */
+interface BaseReportArgs extends BaseArgs {
+    /**
+     * The output file for a report.
+     * If the given string does not end with `.json`, this is interpreted as a directory
+     * and the output is sent to `report.json` in that directory.
+     */
+    outputFile?: string
+}
+
+/**
  * Base arguments for a class that handles annotation.
  */
-export interface BaseAnnotateArgs extends BaseReportArgs {
+export interface BaseAnnotateArgs extends BaseArgs {
     /**
-     * The directory to write typestub files to.
+     * The directory to write files to.
      */
     outputDirectory: string
 
@@ -94,16 +84,6 @@ export interface BaseAnnotateArgs extends BaseReportArgs {
      * Whether known large definition classes should have their fields excluded.
      */
     excludeKnownDefs: boolean
-}
-
-/**
- * Base arguments for Lua readers.
- */
-interface BaseReaderArgs {
-    /**
-     * An array to write errors to.
-     */
-    errors: string[]
 }
 
 type AssignmentLHS = ast.Identifier | ast.MemberExpression | ast.IndexExpression

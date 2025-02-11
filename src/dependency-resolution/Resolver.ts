@@ -1,12 +1,11 @@
 import fs from 'fs'
 import path from 'path'
-import { performance } from 'perf_hooks'
 import { log } from '../logger'
 import { Deque } from '@datastructures-js/deque'
 import { BaseReporter } from '../base'
 import { DependencyReader } from './DependencyReader'
 import { LuaDependencies, LuaDependencyInfoMap, ResolveArgs } from './types'
-import { getAliasMap, getFileIdentifier } from '../helpers'
+import { getAliasMap, getFileIdentifier, time } from '../helpers'
 
 /**
  * Handles determination of dependencies between files.
@@ -26,9 +25,7 @@ export class Resolver extends BaseReporter {
             requires: {},
         }
 
-        this.reader = new DependencyReader({
-            errors: this.errors,
-        })
+        this.reader = new DependencyReader()
     }
 
     /**
@@ -38,15 +35,11 @@ export class Resolver extends BaseReporter {
     async run() {
         this.resetState()
 
-        const start = performance.now()
+        const order = await time('dependency resolution', async () => {
+            await this.readDirectories()
+            return this.getAnalysisOrder()
+        })
 
-        await this.readDirectories()
-        const order = this.getAnalysisOrder()
-
-        const time = (performance.now() - start).toFixed(0)
-        log.verbose(`Finished dependency resolution in ${time}ms`)
-
-        this.reportErrors()
         return order
     }
 
@@ -63,7 +56,6 @@ export class Resolver extends BaseReporter {
         report.uniqueWrites = this.getAllGlobalWrites().size
         report.neverSetReads = this.getNeverSetGlobals(globalReads).size
 
-        this.reportErrors()
         await this.outputReport(report)
     }
 
@@ -327,7 +319,7 @@ export class Resolver extends BaseReporter {
                     await this.readFile(childPath)
                 }
             } catch (e) {
-                this.errors.push(`Failed to read directory '${dirPath}': ${e}`)
+                log.error(`Failed to read directory '${dirPath}': ${e}`)
             }
         }
     }
@@ -371,7 +363,7 @@ export class Resolver extends BaseReporter {
                 this.infoMap.requires[identifier] = info.requires
             }
         } catch (e) {
-            this.errors.push(`Failed to read file '${filePath}': ${e}`)
+            log.error(`Failed to read file '${filePath}': ${e}`)
         }
     }
 

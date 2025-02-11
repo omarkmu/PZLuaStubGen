@@ -38,14 +38,13 @@ import { getLuaFieldKey, readLuaStringLiteral } from '../helpers'
  * Shared context for analysis of multiple Lua files.
  */
 export class AnalysisContext {
-    isRosettaInit = false
-
     protected nextTableIndex: number = 1
     protected nextFunctionIndex: number = 1
 
     protected aliasMap: Map<string, Set<string>>
 
     protected currentModule: string
+    protected isRosettaInit: boolean
 
     /**
      * Definitions for items.
@@ -87,7 +86,7 @@ export class AnalysisContext {
      */
     protected modules: Map<string, ResolvedModule>
 
-    constructor() {
+    constructor(isRosettaInit?: boolean) {
         this.currentModule = ''
         this.aliasMap = new Map()
         this.tableToID = new Map()
@@ -98,6 +97,7 @@ export class AnalysisContext {
         this.definitions = new Map()
         this.usageTypes = new Map()
         this.modules = new Map()
+        this.isRosettaInit = isRosettaInit ?? false
     }
 
     /**

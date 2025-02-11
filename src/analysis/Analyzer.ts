@@ -4,7 +4,7 @@ import { BaseReporter } from '../base'
 import { Resolver } from '../dependency-resolution'
 import { AnalysisReader } from './AnalysisReader'
 import { AnalysisContext } from './AnalysisContext'
-import { getAliasMap } from '../helpers'
+import { getAliasMap, time } from '../helpers'
 import { log } from '../logger'
 
 /**
@@ -17,16 +17,8 @@ export class Analyzer extends BaseReporter {
     constructor(args: AnalyzeArgs) {
         super(args)
 
-        this.context = new AnalysisContext()
-
-        if (args.isRosettaInit) {
-            this.context.isRosettaInit = true
-        }
-
-        this.reader = new AnalysisReader({
-            errors: this.errors,
-            context: this.context,
-        })
+        this.context = new AnalysisContext(args.isRosettaInit)
+        this.reader = new AnalysisReader({ context: this.context })
     }
 
     /**
@@ -36,14 +28,10 @@ export class Analyzer extends BaseReporter {
         this.resetState()
 
         const order = await this.getAnalysisOrder()
+        const modules = time('analysis', async () => {
+            return await this.read(order)
+        })
 
-        const start = performance.now()
-        const modules = await this.read(order)
-
-        const time = (performance.now() - start).toFixed(0)
-        log.verbose(`Finished analysis in ${time}ms`)
-
-        this.reportErrors()
         return modules
     }
 
@@ -53,7 +41,6 @@ export class Analyzer extends BaseReporter {
     async generateReport() {
         const modules = await this.run()
 
-        this.reportErrors()
         await this.outputReport({ modules })
     }
 
@@ -65,8 +52,6 @@ export class Analyzer extends BaseReporter {
         const resolver = new Resolver({
             inputDirectory: this.inDirectory,
             subdirectories: this.subdirectories,
-            errors: this.errors,
-            suppressErrors: true, // report errors at the end
         })
 
         return await resolver.run()
@@ -93,7 +78,7 @@ export class Analyzer extends BaseReporter {
 
                 await this.reader.readModuleInfo(identifier, filename)
             } catch (e) {
-                this.errors.push(`Failed to analyze file '${identifier}': ${e}`)
+                log.error(`Failed to analyze file '${identifier}': ${e}`)
             }
         }
 

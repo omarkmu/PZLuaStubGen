@@ -1,4 +1,4 @@
-import { BaseReaderArgs, BaseReportArgs } from '../base/types'
+import { BaseReportArgs } from '../base/types'
 import { LuaExpression, LuaRequire, TableField } from './types.helpers'
 import { AnalysisContext } from './AnalysisContext'
 import { LuaScope } from '../scopes'
@@ -387,6 +387,6 @@ export interface AnalyzeArgs extends BaseReportArgs {
     isRosettaInit?: boolean
 }
 
-export interface AnalysisReaderArgs extends BaseReaderArgs {
+export interface AnalysisReaderArgs {
     context: AnalysisContext
 }

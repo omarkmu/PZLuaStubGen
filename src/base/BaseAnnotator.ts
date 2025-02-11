@@ -3,9 +3,8 @@ import { Analyzer } from '../analysis/Analyzer'
 import { AnalyzedClass, AnalyzedModule } from '../analysis/types'
 import { Rosetta } from '../rosetta/Rosetta'
 import { RosettaFile } from '../rosetta/types'
-import { BaseReporter } from './BaseReporter'
 import { BaseAnnotateArgs } from './types'
-import { log } from '../logger'
+import { Base } from './Base'
 import {
     convertRosettaClass,
     convertRosettaFields,
@@ -25,7 +24,7 @@ const DEFAULT_EXCLUDES = [
     'SpecialLootSpawns',
 ]
 
-export class BaseAnnotator extends BaseReporter {
+export class BaseAnnotator extends Base {
     protected outDirectory: string
     protected rosetta: Rosetta
     protected useRosetta: boolean
@@ -137,9 +136,7 @@ export class BaseAnnotator extends BaseReporter {
         const analyzer = new Analyzer({
             inputDirectory: this.inDirectory,
             subdirectories: this.subdirectories,
-            errors: this.errors,
             isRosettaInit,
-            suppressErrors: true, // report errors at the end
         })
 
         const modules = await analyzer.run()
@@ -153,14 +150,7 @@ export class BaseAnnotator extends BaseReporter {
             return
         }
 
-        const rosettaDir = this.rosetta.inputDirectory
-        log.verbose(`Loading Rosetta from '${rosettaDir}'`)
-
-        if (await this.rosetta.load()) {
-            log.verbose('Loaded Rosetta')
-        } else {
-            log.warn(`Failed to load Rosetta from '${rosettaDir}'`)
-        }
+        await this.rosetta.load()
     }
 
     protected async transformModules(modules: AnalyzedModule[]) {

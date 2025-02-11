@@ -1,81 +1,23 @@
-import fs from 'fs'
 import path from 'path'
 import { BaseReportArgs } from './types'
 import { log } from '../logger'
+import { Base } from './Base'
+import { outputFile } from '../helpers'
 
 /**
  * Base class for classes that report on information about Lua.
  */
-export abstract class BaseReporter {
-    protected inDirectory: string
+export abstract class BaseReporter extends Base {
     protected outFile: string | undefined
-    protected subdirectories: string[]
-    protected errors: string[]
     protected fileSet: Set<string>
-    protected suppressErrors: boolean
-
-    static updatedLogLevel: boolean = false
 
     constructor(args: BaseReportArgs) {
-        this.inDirectory = path.normalize(args.inputDirectory)
-        this.errors = args.errors ?? []
+        super(args)
         this.fileSet = new Set()
-        this.suppressErrors = args.suppressErrors ?? false
 
         this.outFile = args.outputFile
             ? path.normalize(args.outputFile)
             : undefined
-
-        this.subdirectories = args.subdirectories ?? [
-            'shared',
-            'client',
-            'server',
-        ]
-
-        if (args.allSubdirectories) {
-            this.subdirectories = []
-        } else {
-            this.subdirectories = this.subdirectories.filter(
-                (x) => x && x !== '',
-            )
-        }
-
-        if (BaseReporter.updatedLogLevel) {
-            return
-        }
-
-        BaseReporter.updatedLogLevel = true
-        if (args.verbose) {
-            log.level = 'verbose'
-        } else if (args.silent || args.level === 'silent') {
-            log.silent = true
-        } else {
-            log.level = args.level ?? 'info'
-        }
-    }
-
-    /**
-     * Gets the directories to scan for files.
-     */
-    protected getScanDirectories(): string[] {
-        if (this.subdirectories.length === 0) {
-            return [this.inDirectory]
-        }
-
-        const scanDirs = []
-        for (const dirname of this.subdirectories) {
-            scanDirs.push(path.join(this.inDirectory, dirname))
-        }
-
-        return scanDirs
-    }
-
-    protected async outputFile(outFile: string, content: string) {
-        await fs.promises.mkdir(path.dirname(outFile), {
-            recursive: true,
-        })
-
-        await fs.promises.writeFile(outFile, content, { flag: 'w' })
     }
 
     /**
@@ -94,27 +36,13 @@ export abstract class BaseReporter {
                 : path.join(this.outFile, 'report.json')
 
             try {
-                await this.outputFile(outFile, json)
+                await outputFile(outFile, json)
                 log.info(`Report generated at ${path.resolve(outFile)}`)
             } catch (e) {
-                this.errors.push(`Failed to create file '${outFile}': ${e}`)
+                log.error(`Failed to create file '${outFile}': ${e}`)
             }
         } else {
             console.log(json)
-        }
-    }
-
-    /**
-     * Outputs any errors that occurred during processing.
-     * Errors are written to `stderr`.
-     */
-    protected reportErrors() {
-        if (this.suppressErrors) {
-            return
-        }
-
-        for (const err of this.errors) {
-            log.error(err)
         }
     }
 
@@ -123,6 +51,5 @@ export abstract class BaseReporter {
      */
     protected resetState() {
         this.fileSet.clear()
-        this.errors.splice(0, this.errors.length)
     }
 }
