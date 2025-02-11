@@ -96,7 +96,7 @@ export const writeTableFields = (
             depth + 1,
         )
 
-        if (typeString && isTable) {
+        if (isTable && typeString && valueString !== 'nil') {
             if (i > 0) {
                 out.push('\n')
             }
