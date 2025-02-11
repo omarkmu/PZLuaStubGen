@@ -284,7 +284,11 @@ export class Annotator extends BaseReporter {
             ),
         )
 
-        const staticFieldSet = new Set<string>(cls.fields.map((x) => x.name))
+        const staticFieldSet = new Set<string>(
+            cls.staticFields.map((x) => x.name),
+        )
+        cls.setterFields.forEach((x) => staticFieldSet.add(x.name))
+
         cls.staticFields.push(
             ...convertRosettaFields(rosettaClass.staticFields ?? {}).filter(
                 (x) => !staticFieldSet.has(x.name),
@@ -292,6 +296,8 @@ export class Annotator extends BaseReporter {
         )
 
         const funcSet = new Set<string>(cls.functions.map((x) => x.name))
+        cls.functionConstructors.forEach((x) => funcSet.add(x.name))
+
         cls.functions.push(
             ...convertRosettaFunctions(rosettaClass.staticMethods ?? {}).filter(
                 (x) => !funcSet.has(x.name),
