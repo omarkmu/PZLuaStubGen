@@ -26,7 +26,6 @@ import {
     getRosettaTypeString,
     getTypeString,
     getValueString,
-    isLiteralTable,
     outputFile,
     time,
     writeNotes,
@@ -57,10 +56,6 @@ export class Annotator extends BaseAnnotator {
         const rosettaFile = this.rosetta.files[mod.id]
 
         if (this.writeRequires(mod, out, rosettaFile)) {
-            out.push('\n')
-        }
-
-        if (this.writeLocals(mod, out)) {
             out.push('\n')
         }
 
@@ -416,42 +411,6 @@ export class Annotator extends BaseAnnotator {
         }
 
         return mod.functions.length > 0
-    }
-
-    protected writeLocals(mod: AnalyzedModule, out: string[]): boolean {
-        for (const local of mod.locals) {
-            let typeString: string | undefined
-            const prefix = getFunctionPrefixFromExpression(local.expression)
-
-            if (out.length > 1) {
-                out.push('\n')
-            }
-
-            if (prefix) {
-                out.push(prefix)
-            } else if (local.types) {
-                typeString = getTypeString(local.types)
-            }
-
-            // write table type annotations on the line above
-            if (typeString && isLiteralTable(local.expression)) {
-                out.push(`\n---@type ${typeString}`)
-                typeString = undefined
-            }
-
-            const rhs = getExpressionString(local.expression)
-            if (rhs === 'nil') {
-                out.push(`\nlocal ${local.name}`)
-            } else {
-                out.push(`\nlocal ${local.name} = ${rhs}`)
-            }
-
-            if (typeString) {
-                out.push(` ---@type ${typeString}`)
-            }
-        }
-
-        return mod.locals.length > 0
     }
 
     protected writeOverload(overload: AnalyzedFunction, out: string[]) {

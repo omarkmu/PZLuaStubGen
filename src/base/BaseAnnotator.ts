@@ -136,7 +136,6 @@ export class BaseAnnotator extends Base {
     protected createModule(file: RosettaFile): AnalyzedModule {
         const mod: AnalyzedModule = {
             id: file.id,
-            locals: [],
             classes: [],
             functions: [],
             tables: [],

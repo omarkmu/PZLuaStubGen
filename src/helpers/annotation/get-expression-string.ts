@@ -17,17 +17,40 @@ export const getExpressionString = (
             return getLiteralString(expression, depth)
 
         case 'index':
-            const indexBase = getExpressionString(expression.base)
-            const index = getExpressionString(expression.index)
+            let indexBase = getExpressionString(expression.base, depth)
+            const index = getExpressionString(expression.index, depth)
+
+            indexBase = doBaseParentheses(expression.base)
+                ? `(${indexBase})`
+                : indexBase
 
             return `${indexBase}[${index}]`
 
         case 'member':
-            const memberBase = getExpressionString(expression.base)
+            let memberBase = getExpressionString(expression.base, depth)
+            memberBase = doBaseParentheses(expression.base)
+                ? `(${memberBase})`
+                : memberBase
 
             return `${memberBase}${expression.indexer}${expression.member}`
 
         case 'operation':
             return getOperationString(expression, depth)
+    }
+}
+
+const doBaseParentheses = (base: LuaExpression): boolean => {
+    switch (base.type) {
+        case 'reference':
+        case 'index':
+        case 'member':
+        case 'require':
+            return false
+
+        case 'operation':
+            return base.operator !== 'call'
+
+        default:
+            return true
     }
 }

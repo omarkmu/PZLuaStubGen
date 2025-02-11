@@ -10,7 +10,6 @@ export const convertRosettaFile = (file: RosettaFile): AnalyzedModule => {
         classes: Object.values(file.classes).map(convertRosettaClass),
         tables: Object.values(file.tables).map(convertRosettaTable),
         functions: convertRosettaFunctions(file.functions),
-        locals: [],
         requires: [],
         returns: [],
     }

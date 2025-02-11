@@ -26,7 +26,6 @@ import {
     AnalyzedReturn,
     ResolvedModule,
     TableKey,
-    AnalyzedLocal,
     ResolvedRequireInfo,
     AnalyzedRequire,
     LuaMember,
@@ -209,15 +208,32 @@ export class AnalysisContext {
         const clsMap = new Map<string, AnalyzedClass[]>()
         for (const [id, mod] of this.modules) {
             this.currentModule = id
-            const localReferences = this.getReferences(mod)
+            const refSet = this.getReferences(mod)
+            const refMap: Map<string, LuaExpression | null> = new Map()
+
+            for (const id of refSet) {
+                let expression: LuaExpression | undefined
+                if (id.startsWith('@function')) {
+                    const info = this.finalizeFunction(id, '@local')
+                    expression = {
+                        type: 'literal',
+                        luaType: 'function',
+                        isMethod: info.isMethod,
+                        parameters: info.parameters,
+                        returnTypes: info.returnTypes,
+                    }
+                } else {
+                    const defs = this.definitions.get(id) ?? []
+                    ;[expression] = this.finalizeDefinitions(defs, refMap)
+                }
+
+                refMap.set(id, expression ?? null)
+            }
 
             const classes: AnalyzedClass[] = []
             const tables: AnalyzedTable[] = []
             for (const cls of mod.classes) {
-                const [finalized, isTable] = this.finalizeClass(
-                    cls,
-                    localReferences,
-                )
+                const [finalized, isTable] = this.finalizeClass(cls, refMap)
 
                 if (isTable) {
                     tables.push(finalized)
@@ -248,58 +264,11 @@ export class AnalysisContext {
 
             const returns: AnalyzedReturn[] = []
             for (const ret of mod.returns) {
-                returns.push(this.finalizeReturn(ret, localReferences))
-            }
-
-            const locals: AnalyzedLocal[] = []
-            for (const [id, count] of localReferences) {
-                if (count <= 1) {
-                    continue
-                }
-
-                const name = mod.scope.localIdToName(id)
-                if (!name) {
-                    continue
-                }
-
-                let expression: LuaExpression | undefined
-                let types: Set<string> | undefined
-                if (id.startsWith('@function')) {
-                    const info = this.finalizeFunction(id, '@local')
-                    expression = {
-                        type: 'literal',
-                        luaType: 'function',
-                        isMethod: info.isMethod,
-                        parameters: info.parameters,
-                        returnTypes: info.returnTypes,
-                    }
-                } else {
-                    const defs = this.definitions.get(id) ?? []
-                    ;[expression, types] = this.finalizeDefinitions(
-                        defs,
-                        localReferences,
-                    )
-                }
-
-                const local: AnalyzedLocal = {
-                    name,
-                    expression: expression ?? {
-                        type: 'literal',
-                        luaType: 'nil',
-                        literal: 'nil',
-                    },
-                }
-
-                if (types) {
-                    local.types = types
-                }
-
-                locals.push(local)
+                returns.push(this.finalizeReturn(ret, refMap))
             }
 
             modules.set(id, {
                 id: id,
-                locals,
                 classes,
                 tables,
                 functions,
@@ -1496,7 +1465,7 @@ export class AnalysisContext {
 
     protected finalizeClass(
         cls: ResolvedClassInfo,
-        refs: Map<string, number>,
+        refs: Map<string, LuaExpression | null>,
     ): [AnalyzedClass | AnalyzedTable, boolean] {
         const info = this.getTableInfo(cls.tableId)
         const isTable = info.emitAsTable ?? false
@@ -1847,7 +1816,7 @@ export class AnalysisContext {
 
     protected finalizeDefinitions(
         defs: LuaExpressionInfo[],
-        refs: Map<string, number>,
+        refs: Map<string, LuaExpression | null>,
         seen?: Map<string, LuaExpression | null>,
     ): [LuaExpression | undefined, Set<string> | undefined] {
         let value: LuaExpression | undefined
@@ -1861,7 +1830,7 @@ export class AnalysisContext {
         ) {
             // one def → rewrite unless it's a class reference or defined in a function
             value = this.finalizeExpression(firstExpr.expression, refs, seen)
-            includeTypes = false
+            includeTypes = value.type === 'literal' && value.luaType === 'nil'
         } else {
             // defined in literal → rewrite, but include types
             const literalDef = defs.find((x) => x.fromLiteral)
@@ -1875,7 +1844,7 @@ export class AnalysisContext {
             }
         }
 
-        includeTypes ||= value?.type === 'reference' && refs.get(value.id) !== 1
+        includeTypes ||= value?.type === 'reference' && !!refs.get(value.id)
 
         let types: Set<string> | undefined
         if (includeTypes) {
@@ -1891,14 +1860,6 @@ export class AnalysisContext {
             }
 
             types = this.finalizeTypes(types)
-
-            // local functions will include the type annotations
-            if (value?.type === 'reference') {
-                types.delete('function')
-                if (types.size === 0) {
-                    types = undefined
-                }
-            }
         }
 
         return [value, types]
@@ -1906,11 +1867,12 @@ export class AnalysisContext {
 
     protected finalizeExpression(
         expression: LuaExpression,
-        refs: Map<string, number>,
+        refs: Map<string, LuaExpression | null>,
         seen?: Map<string, LuaExpression | null>,
     ): LuaExpression {
         seen ??= new Map()
 
+        let base: LuaExpression
         switch (expression.type) {
             case 'reference':
                 // remove internal ID information
@@ -1926,43 +1888,22 @@ export class AnalysisContext {
                               : id,
                 }
 
-                if (refs.get(expression.id) !== 1) {
+                const replaceExpr = refs.get(expression.id)
+                if (replaceExpr === undefined) {
                     return sanitizedExpression
                 }
 
-                const literal = this.resolveBasicLiteral(expression)
-                if (literal) {
-                    return literal
+                // null → multiple defs; write `nil`
+                if (!replaceExpr) {
+                    return {
+                        type: 'literal',
+                        luaType: 'nil',
+                        literal: 'nil',
+                    }
                 }
 
-                const types = [...this.resolveTypes({ expression })]
-                const type = types[0]
-
-                if (types.length === 1 && type.startsWith('@table')) {
-                    return this.finalizeExpression(
-                        {
-                            type: 'literal',
-                            luaType: 'table',
-                            tableId: type,
-                        },
-                        refs,
-                        seen,
-                    )
-                } else if (types.length === 1 && type.startsWith('@function')) {
-                    return this.finalizeExpression(
-                        {
-                            type: 'literal',
-                            luaType: 'function',
-                            functionId: type,
-                        },
-                        refs,
-                        seen,
-                    )
-                }
-
-                // failed to resolve → emit the local
-                refs.set(expression.id, 2)
-                return sanitizedExpression
+                // failed to resolve → emit the value of the local
+                return this.finalizeExpression(replaceExpr, refs, seen)
 
             case 'literal':
                 const tableId = expression.tableId
@@ -1985,14 +1926,7 @@ export class AnalysisContext {
                     }
                 }
 
-                return {
-                    type: 'literal',
-                    luaType: expression.luaType,
-                    literal: expression.literal,
-                    fields: expression.fields,
-                    parameters: expression.parameters,
-                    returnTypes: expression.returnTypes,
-                }
+                return { ...expression }
 
             case 'operation':
                 return {
@@ -2004,10 +1938,39 @@ export class AnalysisContext {
                 }
 
             case 'member':
-                return {
-                    ...expression,
-                    base: this.finalizeExpression(expression.base, refs),
+                base = this.finalizeExpression(expression.base, refs, seen)
+
+                if (base.type !== 'literal' || !base.fields) {
+                    return { ...expression, base }
                 }
+
+                const memberKey = getLuaFieldKey(expression.member)
+                for (const field of base.fields) {
+                    let keyName: string | undefined
+                    switch (field.key.type) {
+                        case 'string':
+                            keyName = field.key.name
+                            break
+
+                        case 'literal':
+                            keyName = field.key.name ?? `[${field.key.literal}]`
+                            break
+
+                        case 'auto':
+                            keyName = `[${field.key.index}]`
+                            break
+                    }
+
+                    if (!keyName) {
+                        continue
+                    }
+
+                    if (keyName === memberKey) {
+                        return this.finalizeExpression(field.value, refs, seen)
+                    }
+                }
+
+                return { ...expression, base }
 
             case 'index':
                 return {
@@ -2073,7 +2036,7 @@ export class AnalysisContext {
 
     protected finalizeReturn(
         ret: ResolvedReturnInfo,
-        refs: Map<string, number>,
+        refs: Map<string, LuaExpression | null>,
     ): AnalyzedReturn {
         let expression: LuaExpression | undefined
         const types = new Set<string>()
@@ -2103,7 +2066,7 @@ export class AnalysisContext {
 
     protected finalizeStaticField(
         expressions: LuaExpressionInfo[],
-        refs: Map<string, number>,
+        refs: Map<string, LuaExpression | null>,
     ): [LuaExpression | undefined, Set<string>] {
         const staticTypes = new Set<string>()
         for (const expr of expressions) {
@@ -2148,7 +2111,7 @@ export class AnalysisContext {
 
     protected finalizeTable(
         id: string,
-        refs: Map<string, number>,
+        refs: Map<string, LuaExpression | null>,
         seen?: Map<string, LuaExpression | null>,
     ): LuaExpression | undefined {
         seen ??= new Map()
@@ -2407,7 +2370,7 @@ export class AnalysisContext {
         return '"' + internal.replaceAll('"', '\\"') + '"'
     }
 
-    protected getReferences(mod: ResolvedModule): Map<string, number> {
+    protected getReferences(mod: ResolvedModule): Set<string> {
         const stack: [LuaExpression, number][] = []
         for (const cls of mod.classes) {
             const info = this.getTableInfo(cls.tableId)
@@ -2521,7 +2484,7 @@ export class AnalysisContext {
             }
         }
 
-        return refCount
+        return new Set([...refCount.entries()].map((x) => x[0]))
     }
 
     /**

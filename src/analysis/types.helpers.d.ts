@@ -246,12 +246,6 @@ export interface AnalyzedReturn {
     types: Set<string>
 }
 
-export interface AnalyzedLocal {
-    name: string
-    expression: LuaExpression
-    types?: Set<string>
-}
-
 export interface AnalyzedRequire {
     name: string
     module: string
@@ -260,7 +254,6 @@ export interface AnalyzedRequire {
 export interface AnalyzedModule {
     id: string
     prefix?: string
-    locals: AnalyzedLocal[]
     functions: AnalyzedFunction[]
     classes: AnalyzedClass[]
     tables: AnalyzedTable[]

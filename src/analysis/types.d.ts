@@ -360,7 +360,6 @@ export {
     LuaIndex,
     TableKey,
     TableField,
-    AnalyzedLocal,
     AnalyzedParameter,
     AnalyzedFunction,
     AnalyzedField,
