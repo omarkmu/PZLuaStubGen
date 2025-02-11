@@ -901,6 +901,15 @@ export class Annotator extends BaseReporter {
         const params = rosettaFunc.parameters ?? []
         for (let i = 0; i < params.length; i++) {
             const param = params[i]
+            if (
+                !param.type &&
+                !param.optional &&
+                !param.nullable &&
+                !param.notes
+            ) {
+                continue
+            }
+
             const type = getRosettaTypeString(
                 param.type,
                 param.optional,
