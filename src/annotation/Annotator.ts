@@ -380,13 +380,13 @@ export class Annotator extends BaseReporter {
     }
 
     protected async getModules(
-        noLiteralClassFields = false,
+        isRosettaInit = false,
     ): Promise<AnalyzedModule[]> {
         const analyzer = new Analyzer({
             inputDirectory: this.inDirectory,
             subdirectories: this.subdirectories,
             errors: this.errors,
-            noLiteralClassFields,
+            isRosettaInit,
             suppressErrors: true, // report errors at the end
         })
 

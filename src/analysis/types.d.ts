@@ -384,7 +384,7 @@ export type AnalysisItem =
  * Arguments for type analysis.
  */
 export interface AnalyzeArgs extends BaseReportArgs {
-    noLiteralClassFields?: boolean
+    isRosettaInit?: boolean
 }
 
 export interface AnalysisReaderArgs extends BaseReaderArgs {

@@ -38,7 +38,7 @@ import { getLuaFieldKey, readLuaStringLiteral } from '../helpers'
  * Shared context for analysis of multiple Lua files.
  */
 export class AnalysisContext {
-    noLiteralClassFields = false
+    isRosettaInit = false
 
     protected nextTableIndex: number = 1
     protected nextFunctionIndex: number = 1
@@ -1502,7 +1502,7 @@ export class AnalysisContext {
         const literalKeys = new Set<string>()
 
         const allowLiteralFields =
-            isClassDefiner && !this.noLiteralClassFields && !isTable
+            isClassDefiner && !this.isRosettaInit && !isTable
 
         if (allowLiteralFields) {
             for (const field of info.literalFields) {

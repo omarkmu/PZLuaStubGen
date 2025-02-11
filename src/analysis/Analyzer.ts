@@ -18,7 +18,10 @@ export class Analyzer extends BaseReporter {
         super(args)
 
         this.context = new AnalysisContext()
-        this.context.noLiteralClassFields = args.noLiteralClassFields ?? false
+
+        if (args.isRosettaInit) {
+            this.context.isRosettaInit = true
+        }
 
         this.reader = new AnalysisReader({
             errors: this.errors,
