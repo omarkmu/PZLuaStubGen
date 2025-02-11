@@ -1643,6 +1643,11 @@ export class AnalysisContext {
                     continue
                 }
 
+                // ignore static children field for Atom UI classes
+                if (name === 'children' && info.isAtomUI) {
+                    continue
+                }
+
                 let [expression, types] = this.finalizeStaticField(
                     staticExprs,
                     refs,
