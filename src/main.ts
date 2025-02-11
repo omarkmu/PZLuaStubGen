@@ -13,7 +13,7 @@ import {
 /**
  * Adds shared yargs options to prefix for all commands.
  */
-const sharedPrefix = (yargs: yargs.Argv) => {
+const sharedPrefix = (yargs: yargs.Argv, requireInputDir = true) => {
     return yargs
         .option('level', {
             type: 'string',
@@ -35,7 +35,8 @@ const sharedPrefix = (yargs: yargs.Argv) => {
         .option('input-directory', {
             type: 'string',
             alias: 'i',
-            required: true,
+            required: requireInputDir,
+            conflicts: ['rosetta-only'],
             desc: 'The directory for input Lua files',
         })
 }
@@ -58,6 +59,10 @@ const sharedSuffix = (yargs: yargs.Argv) => {
             desc: 'If given, all subdirectories of the input directory will be read',
         })
         .check((args: any) => {
+            if (!args.inputDirectory) {
+                return true
+            }
+
             if (!fs.existsSync(path.resolve(args.inputDirectory))) {
                 throw 'Input directory does not exist.'
             }
@@ -82,7 +87,7 @@ const addExcludeOptions = (yargs: yargs.Argv) => {
         })
         .option('exclude-known-defs', {
             type: 'boolean',
-            default: true,
+            defaultDescription: 'true',
             desc: 'Whether known definition classes should be included without fields',
         })
 }
@@ -91,7 +96,7 @@ const addExcludeOptions = (yargs: yargs.Argv) => {
  * Adds the CLI options for the annotate command.
  */
 const annotateCommand = (yargs: yargs.Argv) => {
-    yargs = sharedPrefix(yargs)
+    yargs = sharedPrefix(yargs, false)
         .option('output-directory', {
             type: 'string',
             alias: 'o',
@@ -111,10 +116,10 @@ const annotateCommand = (yargs: yargs.Argv) => {
         .option('inject', {
             type: 'boolean',
             hidden: true,
-            default: true,
         })
         .option('no-inject', {
             type: 'boolean',
+            defaultDescription: 'false',
             desc: 'Disallow injecting additional data from Rosetta',
         })
         .option('strict-fields', {
@@ -126,10 +131,25 @@ const annotateCommand = (yargs: yargs.Argv) => {
             type: 'boolean',
             desc: 'Marks classes as accepting fields of any type',
         })
+        .option('rosetta-only', {
+            type: 'boolean',
+            conflicts: ['input-directory', 'inject'],
+            implies: ['rosetta'],
+            desc: 'Generate typestubs using only Rosetta data',
+        })
         .option('rosetta', {
             type: 'string',
             alias: 'r',
             desc: 'The directory to use for rosetta files',
+        })
+        .check((args: any) => {
+            if (!args.inputDirectory && !args.rosettaOnly) {
+                throw new Error(
+                    'Missing required argument: input-directory or rosetta-only',
+                )
+            }
+
+            return true
         })
 
     return sharedSuffix(addExcludeOptions(yargs))
@@ -144,7 +164,7 @@ const initRosettaCommand = (yargs: yargs.Argv) => {
             type: 'string',
             alias: 'o',
             required: true,
-            desc: 'The directory for output stubs',
+            desc: 'The directory for output files',
         })
         .option('format', {
             type: 'string',

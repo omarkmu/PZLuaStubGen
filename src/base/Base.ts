@@ -9,7 +9,10 @@ export class Base {
     private static updatedLogLevel: boolean = false
 
     constructor(args: BaseArgs) {
-        this.inDirectory = path.normalize(args.inputDirectory)
+        this.inDirectory = args.inputDirectory
+            ? path.normalize(args.inputDirectory)
+            : ''
+
         this.subdirectories = args.subdirectories ?? [
             'shared',
             'client',

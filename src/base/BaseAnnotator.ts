@@ -29,6 +29,7 @@ export class BaseAnnotator extends Base {
     protected rosetta: Rosetta
     protected useRosetta: boolean
     protected noInject: boolean
+    protected rosettaOnly: boolean
     protected exclude: Set<string>
     protected excludeFields: Set<string>
 
@@ -36,11 +37,12 @@ export class BaseAnnotator extends Base {
         super(args)
 
         this.outDirectory = path.normalize(args.outputDirectory)
-        this.noInject = !args.inject
+        this.noInject = !(args.inject ?? true)
         this.exclude = new Set(args.exclude)
         this.excludeFields = new Set(args.excludeFields)
+        this.rosettaOnly = args.rosettaOnly ?? false
 
-        if (args.excludeKnownDefs) {
+        if (args.excludeKnownDefs ?? !args.rosettaOnly) {
             DEFAULT_EXCLUDES.forEach((x) => this.excludeFields.add(x))
         }
 
@@ -130,18 +132,36 @@ export class BaseAnnotator extends Base {
         return mod
     }
 
+    protected createModule(file: RosettaFile): AnalyzedModule {
+        const mod: AnalyzedModule = {
+            id: file.id,
+            locals: [],
+            classes: [],
+            functions: [],
+            tables: [],
+            requires: [],
+            returns: [],
+        }
+
+        return this.augmentModule(mod)
+    }
+
     protected async getModules(
         isRosettaInit = false,
     ): Promise<AnalyzedModule[]> {
-        const analyzer = new Analyzer({
-            inputDirectory: this.inDirectory,
-            subdirectories: this.subdirectories,
-            isRosettaInit,
-        })
+        let modules: AnalyzedModule[] = []
 
-        const modules = await analyzer.run()
+        if (!this.rosettaOnly) {
+            const analyzer = new Analyzer({
+                inputDirectory: this.inDirectory,
+                subdirectories: this.subdirectories,
+                isRosettaInit,
+            })
+
+            modules = await analyzer.run()
+        }
+
         await this.transformModules(modules)
-
         return modules
     }
 
@@ -154,6 +174,13 @@ export class BaseAnnotator extends Base {
     }
 
     protected async transformModules(modules: AnalyzedModule[]) {
+        const idSet = new Set<string>(modules.map((x) => x.id))
+        for (const [id, file] of Object.entries(this.rosetta.files)) {
+            if (!idSet.has(id)) {
+                modules.push(this.createModule(file))
+            }
+        }
+
         for (const mod of modules) {
             const rosettaFile = this.rosetta.files[mod.id]
             mod.classes = mod.classes.filter((x) => !this.exclude.has(x.name))
@@ -184,7 +211,7 @@ export class BaseAnnotator extends Base {
             }
         }
 
-        if (!this.noInject) {
+        if (this.rosettaOnly || !this.noInject) {
             for (const mod of modules) {
                 this.augmentModule(mod)
             }

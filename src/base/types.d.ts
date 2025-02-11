@@ -7,7 +7,7 @@ interface BaseArgs {
     /**
      * The directory to read Lua files from.
      */
-    inputDirectory: string
+    inputDirectory?: string
 
     /**
      * Subdirectories to read Lua files from, in order of priority.
@@ -66,6 +66,11 @@ export interface BaseAnnotateArgs extends BaseArgs {
     rosetta?: string
 
     /**
+     * Whether annotation should be performed using only rosetta data.
+     */
+    rosettaOnly?: boolean
+
+    /**
      * Whether injection via Rosetta of data that wasn't detected in the source is enabled.
      */
     inject?: boolean
@@ -83,7 +88,7 @@ export interface BaseAnnotateArgs extends BaseArgs {
     /**
      * Whether known large definition classes should have their fields excluded.
      */
-    excludeKnownDefs: boolean
+    excludeKnownDefs?: boolean
 }
 
 type AssignmentLHS = ast.Identifier | ast.MemberExpression | ast.IndexExpression
