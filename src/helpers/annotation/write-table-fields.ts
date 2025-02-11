@@ -4,6 +4,7 @@ import { getExpressionString } from './get-expression-string'
 import { getFunctionPrefixFromExpression } from './get-function-prefix-from-expression'
 import { getRosettaTypeString } from './get-rosetta-type-string'
 import { getTypeString } from './get-type-string'
+import { getValueString } from './get-value-string'
 import { isLiteralTable } from './is-literal-table'
 import { writeNotes } from './write-notes'
 
@@ -65,9 +66,8 @@ export const writeTableFields = (
         }
 
         const isRef = field.value.type === 'reference'
-        let typeString: string | undefined
-
         let hasRosettaType = false
+        let typeString: string | undefined
         if (rosettaField?.type || rosettaField?.nullable !== undefined) {
             typeString = getRosettaTypeString(
                 rosettaField.type,
@@ -87,19 +87,14 @@ export const writeTableFields = (
         const isTable = isLiteralTable(field.value)
 
         let valueString: string
-        if (rosettaField?.defaultValue) {
-            valueString = rosettaField.defaultValue
-            typeString = hasRosettaType ? typeString : undefined
-        } else if (!hasRosettaType) {
-            valueString = getExpressionString(field.value, depth + 1)
-        } else {
-            valueString = 'nil'
-        }
-
-        // don't write `---@type table` when a table literal is available
-        if (isTable && typeString === 'table' && valueString !== 'nil') {
-            typeString = undefined
-        }
+        ;[valueString, typeString] = getValueString(
+            field.value,
+            rosettaField,
+            typeString,
+            hasRosettaType,
+            isTable,
+            depth + 1,
+        )
 
         if (typeString && isTable) {
             if (i > 0) {
@@ -129,7 +124,7 @@ export const writeTableFields = (
             out.push(' = ')
         }
 
-        out.push(valueString.trim())
+        out.push(valueString)
         out.push(',')
 
         if (typeString) {

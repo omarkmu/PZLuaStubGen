@@ -41,6 +41,7 @@ import {
     getInlineNotes,
     getRosettaTypeString,
     getTypeString,
+    getValueString,
     isLiteralTable,
     writeNotes,
     writeTableFields,
@@ -1007,16 +1008,15 @@ export class Annotator extends BaseReporter {
         }
 
         let valueString: string
-        if (rosettaField?.defaultValue) {
-            valueString = rosettaField.defaultValue
-            typeString = hasRosettaType ? typeString : undefined
-        } else if (field.expression && !hasRosettaType) {
-            valueString = getExpressionString(field.expression)
-        } else {
-            valueString = 'nil'
-        }
+        ;[valueString, typeString] = getValueString(
+            field.expression,
+            rosettaField,
+            typeString,
+            hasRosettaType,
+            false,
+        )
 
-        out.push(`${field.name} = ${valueString.trim()}`)
+        out.push(`${field.name} = ${valueString}`)
 
         if (typeString) {
             out.push(` ---@type ${typeString}`)
