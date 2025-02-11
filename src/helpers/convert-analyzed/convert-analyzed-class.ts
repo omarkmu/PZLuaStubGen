@@ -24,15 +24,6 @@ export const convertAnalyzedClass = (
 
     if (cls.staticFields.length > 0) {
         rosettaCls.staticFields = convertAnalyzedFields(cls.staticFields)
-
-        // use the auto-generated static `Type` field
-        if (cls.deriveName) {
-            delete rosettaCls.staticFields.Type
-
-            if (Object.keys(rosettaCls.staticFields).length === 0) {
-                delete rosettaCls.staticFields
-            }
-        }
     }
 
     if (cls.setterFields.length > 0) {

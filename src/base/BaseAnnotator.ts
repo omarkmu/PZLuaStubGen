@@ -11,6 +11,7 @@ import {
     convertRosettaFunction,
     convertRosettaFunctions,
     convertRosettaTable,
+    readLuaStringLiteral,
 } from '../helpers'
 
 const DEFAULT_EXCLUDES = [
@@ -195,16 +196,24 @@ export class BaseAnnotator extends Base {
                     continue
                 }
 
-                // inject static `Type` field for derived classes
-                // skip if rosetta `Type` field is defined
-                if (cls.deriveName && !rosettaClass?.staticFields?.Type) {
+                let deriveName: string | undefined
+                const rosettaType = rosettaClass?.staticFields?.Type
+                if (cls.extends && rosettaType?.defaultValue) {
+                    // use rosetta field if defined & valid string literal
+                    deriveName = readLuaStringLiteral(rosettaType.defaultValue)
+                } else {
+                    // inject static `Type` field for derived classes
+                    deriveName = cls.deriveName
+                }
+
+                if (deriveName) {
                     cls.staticFields.unshift({
                         name: 'Type',
                         types: new Set(),
                         expression: {
                             type: 'literal',
                             luaType: 'string',
-                            literal: `"${cls.deriveName}"`,
+                            literal: `"${deriveName}"`,
                         },
                     })
                 }
