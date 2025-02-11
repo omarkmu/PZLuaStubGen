@@ -12,7 +12,7 @@ export const getFunctionPrefix = (
     parameters ??= []
     for (const param of parameters) {
         let typeString = getTypeString(param.types)
-        if (typeString === 'any') {
+        if (typeString === 'unknown') {
             continue
         }
 

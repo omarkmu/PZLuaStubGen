@@ -6,9 +6,9 @@ export const convertAnalyzedReturns = (
 ): RosettaReturn[] => {
     return returns.map((x): RosettaReturn => {
         const ret: RosettaReturn = {}
-        const [types, nullable] = convertAnalyzedTypes(x)
+        const [type, nullable] = convertAnalyzedTypes(x)
 
-        ret.type = types ?? 'any'
+        ret.type = type ?? 'unknown'
 
         if (nullable) {
             ret.nullable = true

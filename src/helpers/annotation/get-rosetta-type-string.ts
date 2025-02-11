@@ -3,8 +3,7 @@ export const getRosettaTypeString = (
     optional: boolean | undefined,
     nullable?: boolean,
 ): string => {
-    type ??= 'any'
-    type = type.trim()
+    type = (type ?? 'unknown').trim()
 
     if (nullable) {
         type += ' | nil'

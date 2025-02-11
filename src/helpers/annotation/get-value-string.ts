@@ -20,7 +20,7 @@ export const getValueString = (
         valueString = 'nil'
     }
 
-    if (valueString === 'nil' && typeString === 'any?') {
+    if (valueString === 'nil' && typeString === 'unknown?') {
         typeString = undefined
     }
 

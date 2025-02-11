@@ -1,18 +1,11 @@
 export const getTypeString = (types: Set<string>): string => {
     types = new Set(types)
-    if (types.size === 0) {
-        return 'any'
-    }
-
     const nullable = types.delete('nil')
-    if (types.size === 0) {
-        return 'any?'
-    }
 
-    const typeString = [...types].join(' | ')
+    const type = types.size > 0 ? [...types].join(' | ') : 'unknown'
     if (nullable) {
-        return typeString.includes('|') ? `(${typeString})?` : `${typeString}?`
+        return type.includes('|') ? `(${type})?` : `${type}?`
     }
 
-    return typeString
+    return type
 }

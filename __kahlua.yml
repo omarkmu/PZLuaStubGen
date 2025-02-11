@@ -53,7 +53,7 @@ languages:
           - name: newarray
             parameters:
               - name: "..."
-                type: any
+                type: unknown
             return:
               - type: table
             overloads:
@@ -81,12 +81,12 @@ languages:
           - name: seed
             parameters:
               - name: value
-                type: any?
+                type: unknown?
     functions:
       - name: serialize
         parameters:
           - name: value
-            type: any
+            type: unknown
           - name: multiline
             type: string?
           - name: indent
@@ -98,11 +98,11 @@ languages:
           - name: s
             type: string
         return:
-          - type: any
+          - type: unknown
       - name: pp
         parameters:
           - name: value
-            type: any
+            type: unknown
         return:
           - type: string
       - name: debugstacktrace
