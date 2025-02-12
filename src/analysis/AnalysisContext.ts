@@ -1592,18 +1592,37 @@ export class AnalysisContext {
             }
 
             const value = this.finalizeExpression(field.value, refs)
-            if (allowLiteralFields) {
-                literalFields.push({
-                    key,
-                    value,
-                })
-
+            if (!allowLiteralFields) {
                 if (keyName) {
-                    literalKeys.add(keyName)
+                    literalExpressions.set(keyName, value)
                 }
-            } else if (keyName) {
-                literalExpressions.set(keyName, value)
+
+                continue
             }
+
+            let types: Set<string> | undefined
+            if (keyName) {
+                literalKeys.add(keyName)
+
+                const literalKeyName = this.getLiteralKey(keyName)
+                const defs = info.definitions.get(literalKeyName) ?? []
+                if (defs.length > 1) {
+                    ;[, types] = this.finalizeDefinitions(defs, refs)
+                }
+
+                // don't write type if it can be determined from the literal
+                const isNil =
+                    value.type === 'literal' && value.luaType === 'nil'
+                if (!isNil && types?.size === 1) {
+                    types = undefined
+                }
+            }
+
+            literalFields.push({
+                key,
+                value,
+                types,
+            })
         }
 
         const checkSubfields: [string, string][] = []
