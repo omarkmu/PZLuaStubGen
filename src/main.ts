@@ -17,20 +17,16 @@ const addSharedPrefix = (yargs: yargs.Argv, requireInputDir = true) => {
     return yargs
         .option('level', {
             type: 'string',
-            choices: ['error', 'warn', 'info', 'verbose', 'debug', 'silent'],
+            alias: 'l',
+            choices: ['silent', 'error', 'warn', 'info', 'verbose', 'debug'],
             desc: 'Log level',
-            conflicts: ['silent', 'verbose'],
+            conflicts: ['verbose'],
         })
         .option('verbose', {
             type: 'boolean',
             alias: 'v',
             desc: 'Shortcut for verbose log level',
-            conflicts: ['level', 'silent'],
-        })
-        .option('silent', {
-            type: 'boolean',
-            desc: 'Shortcut for silent log level',
-            conflicts: ['level', 'verbose'],
+            conflicts: ['level'],
         })
         .option('input-directory', {
             type: 'string',
