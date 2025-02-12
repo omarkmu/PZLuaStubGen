@@ -383,9 +383,11 @@ export type AnalysisItem =
  * Arguments for type analysis.
  */
 export interface AnalyzeArgs extends BaseReportArgs {
+    heuristics?: boolean
     isRosettaInit?: boolean
 }
 
-export interface AnalysisReaderArgs {
-    context: AnalysisContext
+export interface AnalysisContextArgs {
+    heuristics?: boolean
+    isRosettaInit?: boolean
 }

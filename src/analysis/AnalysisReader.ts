@@ -11,7 +11,6 @@ import {
 
 import {
     AnalysisItem,
-    AnalysisReaderArgs,
     BasicLuaType,
     LuaExpression,
     TableField,
@@ -27,9 +26,9 @@ export class AnalysisReader extends BaseReader {
     protected context: AnalysisContext
     protected expressionCache: Map<ast.Node, LuaExpression>
 
-    constructor(args: AnalysisReaderArgs) {
+    constructor(context: AnalysisContext) {
         super()
-        this.context = args.context
+        this.context = context
         this.expressionCache = new Map()
     }
 

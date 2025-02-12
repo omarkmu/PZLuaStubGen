@@ -17,8 +17,12 @@ export class Analyzer extends BaseReporter {
     constructor(args: AnalyzeArgs) {
         super(args)
 
-        this.context = new AnalysisContext(args.isRosettaInit)
-        this.reader = new AnalysisReader({ context: this.context })
+        this.context = new AnalysisContext({
+            isRosettaInit: args.isRosettaInit,
+            heuristics: args.heuristics,
+        })
+
+        this.reader = new AnalysisReader(this.context)
     }
 
     /**

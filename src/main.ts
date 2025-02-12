@@ -13,7 +13,7 @@ import {
 /**
  * Adds shared yargs options to prefix for all commands.
  */
-const sharedPrefix = (yargs: yargs.Argv, requireInputDir = true) => {
+const addSharedPrefix = (yargs: yargs.Argv, requireInputDir = true) => {
     return yargs
         .option('level', {
             type: 'string',
@@ -44,7 +44,7 @@ const sharedPrefix = (yargs: yargs.Argv, requireInputDir = true) => {
 /**
  * Adds shared yargs options to suffix for all commands.
  */
-const sharedSuffix = (yargs: yargs.Argv) => {
+const addSharedSuffix = (yargs: yargs.Argv) => {
     return yargs
         .option('subdirectories', {
             type: 'array',
@@ -92,11 +92,33 @@ const addExcludeOptions = (yargs: yargs.Argv) => {
         })
 }
 
+const addHeuristicOption = (yargs: yargs.Argv) => {
+    return yargs
+        .option('heuristics', {
+            type: 'boolean',
+            default: true,
+            hidden: true,
+            desc: 'Whether to apply heuristics to guess types',
+        })
+        .option('no-heuristics', {
+            type: 'boolean',
+            desc: 'Disable assumption of types based on common patterns',
+        })
+}
+
+const addOutputFileOption = (yargs: yargs.Argv) => {
+    return yargs.option('output-file', {
+        type: 'string',
+        alias: 'o',
+        desc: 'The output file for report results',
+    })
+}
+
 /**
  * Adds the CLI options for the annotate command.
  */
 const annotateCommand = (yargs: yargs.Argv) => {
-    yargs = sharedPrefix(yargs, false)
+    addSharedPrefix(yargs, false)
         .option('output-directory', {
             type: 'string',
             alias: 'o',
@@ -129,18 +151,19 @@ const annotateCommand = (yargs: yargs.Argv) => {
         })
         .option('no-strict-fields', {
             type: 'boolean',
+            defaultDescription: 'false',
             desc: 'Marks classes as accepting fields of any type',
+        })
+        .option('rosetta', {
+            type: 'string',
+            alias: 'r',
+            desc: 'The directory to use for rosetta files',
         })
         .option('rosetta-only', {
             type: 'boolean',
             conflicts: ['input-directory', 'inject'],
             implies: ['rosetta'],
             desc: 'Generate typestubs using only Rosetta data',
-        })
-        .option('rosetta', {
-            type: 'string',
-            alias: 'r',
-            desc: 'The directory to use for rosetta files',
         })
         .check((args: any) => {
             if (!args.inputDirectory && !args.rosettaOnly) {
@@ -152,14 +175,16 @@ const annotateCommand = (yargs: yargs.Argv) => {
             return true
         })
 
-    return sharedSuffix(addExcludeOptions(yargs))
+    addHeuristicOption(yargs)
+    addExcludeOptions(yargs)
+    return addSharedSuffix(yargs)
 }
 
 /**
  * Adds the CLI options for the rosetta initialization command.
  */
 const initRosettaCommand = (yargs: yargs.Argv) => {
-    yargs = sharedPrefix(yargs)
+    addSharedPrefix(yargs)
         .option('output-directory', {
             type: 'string',
             alias: 'o',
@@ -174,20 +199,30 @@ const initRosettaCommand = (yargs: yargs.Argv) => {
             desc: 'The format to use for generated files',
         })
 
-    return sharedSuffix(addExcludeOptions(yargs))
+    addHeuristicOption(yargs)
+    addExcludeOptions(yargs)
+    return addSharedSuffix(yargs)
 }
 
 /**
- * Adds the shared CLI options for report commands.
+ * Adds the CLI options for the report-analysis command.
  */
-const reportCommand = (yargs: yargs.Argv) => {
-    yargs = sharedPrefix(yargs).option('output-file', {
-        type: 'string',
-        alias: 'o',
-        desc: 'The output file for report results',
-    })
+const reportAnalysisCommand = (yargs: yargs.Argv) => {
+    addSharedPrefix(yargs)
+    addOutputFileOption(yargs)
+    addHeuristicOption(yargs)
 
-    return sharedSuffix(yargs)
+    return addSharedSuffix(yargs)
+}
+
+/**
+ * Adds the CLI options for the report-deps command.
+ */
+const reportDepsCommand = (yargs: yargs.Argv) => {
+    addSharedPrefix(yargs)
+    addOutputFileOption(yargs)
+
+    return addSharedSuffix(yargs)
 }
 
 yargs(hideBin(process.argv))
@@ -207,14 +242,14 @@ yargs(hideBin(process.argv))
     .command(
         'report-analysis',
         'Reports on analyzed and inferred Lua types',
-        reportCommand,
+        reportAnalysisCommand,
         (async (args: AnalyzeArgs) =>
             await new Analyzer(args).generateReport()) as any,
     )
     .command(
         'report-deps',
         'Reports on requires, global reads/writes, and the resolved analysis order',
-        reportCommand,
+        reportDepsCommand,
         (async (args: ResolveArgs) =>
             await new Resolver(args).generateReport()) as any,
     )

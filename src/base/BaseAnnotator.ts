@@ -31,6 +31,7 @@ export class BaseAnnotator extends Base {
     protected useRosetta: boolean
     protected noInject: boolean
     protected rosettaOnly: boolean
+    protected heuristics: boolean
     protected exclude: Set<string>
     protected excludeFields: Set<string>
 
@@ -42,6 +43,7 @@ export class BaseAnnotator extends Base {
         this.exclude = new Set(args.exclude)
         this.excludeFields = new Set(args.excludeFields)
         this.rosettaOnly = args.rosettaOnly ?? false
+        this.heuristics = args.heuristics ?? false
 
         if (args.excludeKnownDefs ?? !args.rosettaOnly) {
             DEFAULT_EXCLUDES.forEach((x) => this.excludeFields.add(x))
@@ -156,6 +158,7 @@ export class BaseAnnotator extends Base {
                 inputDirectory: this.inDirectory,
                 subdirectories: this.subdirectories,
                 isRosettaInit,
+                heuristics: this.heuristics,
             })
 
             modules = await analyzer.run()

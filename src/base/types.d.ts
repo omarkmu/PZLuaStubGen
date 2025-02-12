@@ -89,6 +89,8 @@ export interface BaseAnnotateArgs extends BaseArgs {
      * Whether known large definition classes should have their fields excluded.
      */
     excludeKnownDefs?: boolean
+
+    heuristics?: boolean
 }
 
 type AssignmentLHS = ast.Identifier | ast.MemberExpression | ast.IndexExpression

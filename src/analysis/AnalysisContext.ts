@@ -1,5 +1,6 @@
 import ast from 'luaparse'
 import { LuaScope } from '../scopes'
+import { getLuaFieldKey, readLuaStringLiteral } from '../helpers'
 import {
     AssignmentItem,
     FunctionDefinitionItem,
@@ -30,8 +31,11 @@ import {
     AnalyzedRequire,
     LuaMember,
     AnalyzedTable,
+    AnalysisContextArgs,
 } from './types'
-import { getLuaFieldKey, readLuaStringLiteral } from '../helpers'
+
+const RGBA_NAMES = new Set(['r', 'g', 'b', 'a'])
+const POS_SIZE_NAMES = new Set(['x', 'y', 'z', 'w', 'h', 'width', 'height'])
 
 /**
  * Shared context for analysis of multiple Lua files.
@@ -44,6 +48,7 @@ export class AnalysisContext {
 
     protected currentModule: string
     protected isRosettaInit: boolean
+    protected applyHeuristics: boolean
 
     /**
      * Definitions for items.
@@ -85,7 +90,7 @@ export class AnalysisContext {
      */
     protected modules: Map<string, ResolvedModule>
 
-    constructor(isRosettaInit?: boolean) {
+    constructor(args: AnalysisContextArgs) {
         this.currentModule = ''
         this.aliasMap = new Map()
         this.tableToID = new Map()
@@ -96,7 +101,9 @@ export class AnalysisContext {
         this.definitions = new Map()
         this.usageTypes = new Map()
         this.modules = new Map()
-        this.isRosettaInit = isRosettaInit ?? false
+
+        this.isRosettaInit = args.isRosettaInit ?? false
+        this.applyHeuristics = args.heuristics ?? false
     }
 
     /**
@@ -508,6 +515,62 @@ export class AnalysisContext {
         info.parameterNames = info.parameters.map(
             (x) => scope.localIdToName(x) ?? x,
         )
+
+        if (this.applyHeuristics) {
+            // at least 2 of {x, y, z, w, h, width, height} → assume number
+            const posSizeCount = info.parameterNames.reduce<number>(
+                (x, name) => (POS_SIZE_NAMES.has(name) ? ++x : x),
+                0,
+            )
+
+            // at least 3 of {r, g, b, a} → assume number
+            const rgbaCount = info.parameterNames.reduce<number>(
+                (x, name) => (RGBA_NAMES.has(name) ? ++x : x),
+                0,
+            )
+
+            for (let i = 0; i < info.parameters.length; i++) {
+                const name = info.parameterNames[i]
+                const assumeNum =
+                    (posSizeCount >= 2 && POS_SIZE_NAMES.has(name)) ||
+                    (rgbaCount >= 3 && RGBA_NAMES.has(name))
+
+                if (assumeNum) {
+                    info.parameterTypes[i] ??= new Set()
+                    info.parameterTypes[i].add('number')
+                    continue
+                }
+
+                const third = name.slice(2, 3)
+                if (name.startsWith('is') && third.toUpperCase() === third) {
+                    info.parameterTypes[i] ??= new Set()
+                    info.parameterTypes[i].add('boolean')
+                    continue
+                }
+
+                const upper = name.toUpperCase()
+                if (upper.startsWith('DO')) {
+                    continue
+                }
+
+                if (upper.startsWith('NUM') || upper.endsWith('NUM')) {
+                    // starts or ends with num → assume number
+                    info.parameterTypes[i] ??= new Set()
+                    info.parameterTypes[i].add('number')
+                    continue
+                }
+
+                if (
+                    upper.endsWith('STR') ||
+                    upper.endsWith('NAME') ||
+                    upper.endsWith('TITLE')
+                ) {
+                    // ends with name, title, or str → assume string
+                    info.parameterTypes[i] ??= new Set()
+                    info.parameterTypes[i].add('string')
+                }
+            }
+        }
 
         for (const param of info.parameters) {
             this.parameterToFunctionId.set(param, functionId)
