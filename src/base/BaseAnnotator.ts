@@ -7,6 +7,7 @@ import { BaseAnnotateArgs } from './types'
 import { Base } from './Base'
 import {
     convertRosettaClass,
+    convertRosettaField,
     convertRosettaFields,
     convertRosettaFunction,
     convertRosettaFunctions,
@@ -132,6 +133,13 @@ export class BaseAnnotator extends Base {
                 .map(convertRosettaTable),
         )
 
+        const fieldSet = new Set<string>(mod.fields.map((x) => x.name))
+        mod.fields.push(
+            ...Object.entries(rosettaFile.fields)
+                .filter(([name]) => !fieldSet.has(name))
+                .map(([name, x]) => convertRosettaField(x, name)),
+        )
+
         return mod
     }
 
@@ -141,7 +149,7 @@ export class BaseAnnotator extends Base {
             classes: [],
             functions: [],
             tables: [],
-            requires: [],
+            fields: [],
             returns: [],
         }
 

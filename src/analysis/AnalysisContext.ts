@@ -28,7 +28,6 @@ import {
     ResolvedModule,
     TableKey,
     ResolvedRequireInfo,
-    AnalyzedRequire,
     LuaMember,
     AnalyzedTable,
     AnalysisContextArgs,
@@ -257,9 +256,9 @@ export class AnalysisContext {
                 }
             }
 
-            const requires: AnalyzedRequire[] = []
+            const fields: AnalyzedField[] = []
             for (const req of mod.requires) {
-                requires.push(req)
+                fields.push(this.finalizeRequire(req))
             }
 
             const functions: AnalyzedFunction[] = []
@@ -279,7 +278,7 @@ export class AnalysisContext {
                 classes,
                 tables,
                 functions,
-                requires,
+                fields,
                 returns,
             })
         }
@@ -2118,6 +2117,28 @@ export class AnalysisContext {
             returnTypes: returns,
             isMethod,
             isConstructor: info.isConstructor || name === 'new',
+        }
+    }
+
+    protected finalizeRequire(req: ResolvedRequireInfo): AnalyzedField {
+        return {
+            name: req.name,
+            types: new Set(),
+            expression: {
+                type: 'operation',
+                operator: 'call',
+                arguments: [
+                    {
+                        type: 'reference',
+                        id: 'require',
+                    },
+                    {
+                        type: 'literal',
+                        luaType: 'string',
+                        literal: `"${req.module.replaceAll('"', '\\"')}"`,
+                    },
+                ],
+            },
         }
     }
 

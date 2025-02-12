@@ -10,6 +10,7 @@ export interface RosettaFile {
     classes: Record<string, RosettaClass>
     tables: Record<string, RosettaTable>
     functions: Record<string, RosettaFunction>
+    fields: Record<string, RosettaField>
 }
 
 export interface RosettaClass {

@@ -1,6 +1,6 @@
 import { AnalyzedField } from '../../analysis'
 import { RosettaField } from '../../rosetta'
-import { convertRosettaTypes } from './convert-rosetta-types'
+import { convertRosettaField } from './convert-rosetta-field'
 
 export const convertRosettaFields = (
     fields: Record<string, RosettaField> | undefined,
@@ -9,10 +9,7 @@ export const convertRosettaFields = (
         return []
     }
 
-    return Object.entries(fields).map(([name, field]) => {
-        return {
-            name,
-            types: convertRosettaTypes(field.type, field.nullable),
-        }
-    })
+    return Object.entries(fields).map(([name, field]) =>
+        convertRosettaField(field, name),
+    )
 }

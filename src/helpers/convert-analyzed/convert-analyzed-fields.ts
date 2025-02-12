@@ -14,12 +14,12 @@ export const convertAnalyzedFields = (
             let hasValue = false
             if (x.expression) {
                 hasValue = true
-                if (!containsLiteralTable(x.expression)) {
-                    field.defaultValue = getExpressionString(x.expression)
-                }
+                const expr = !containsLiteralTable(x.expression)
+                    ? getExpressionString(x.expression)
+                    : 'nil'
 
-                if (field.defaultValue === 'nil') {
-                    delete field.defaultValue
+                if (expr !== 'nil') {
+                    field.defaultValue = expr
                 }
             }
 

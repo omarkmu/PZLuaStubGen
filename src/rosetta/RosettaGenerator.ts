@@ -6,6 +6,7 @@ import { AnalyzedModule } from '../analysis/types'
 import { RosettaGenerateArgs } from './types'
 import {
     convertAnalyzedClass,
+    convertAnalyzedFields,
     convertAnalyzedFunctions,
     convertAnalyzedTable,
     outputFile,
@@ -50,6 +51,10 @@ export class RosettaGenerator extends BaseAnnotator {
 
         if (mod.functions.length > 0) {
             luaData.functions = convertAnalyzedFunctions(mod.functions)
+        }
+
+        if (mod.fields.length > 0) {
+            luaData.fields = convertAnalyzedFields(mod.fields)
         }
 
         const data: any = {}

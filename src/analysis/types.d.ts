@@ -365,7 +365,6 @@ export {
     AnalyzedField,
     AnalyzedTable,
     AnalyzedClass,
-    AnalyzedRequire,
     AnalyzedReturn,
     AnalyzedModule,
 } from './types.helpers'

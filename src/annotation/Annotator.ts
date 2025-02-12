@@ -55,7 +55,7 @@ export class Annotator extends BaseAnnotator {
 
         const rosettaFile = this.rosetta.files[mod.id]
 
-        if (this.writeRequires(mod, out, rosettaFile)) {
+        if (this.writeFields(mod, out, rosettaFile)) {
             out.push('\n')
         }
 
@@ -296,12 +296,12 @@ export class Annotator extends BaseAnnotator {
             // static fields
             const statics = [...cls.staticFields, ...cls.setterFields]
             for (const field of statics) {
-                this.writeStaticField(
-                    identName,
+                this.writeFieldAssignment(
                     field,
                     rosettaClass?.staticFields?.[field.name],
-                    writtenFields,
                     out,
+                    identName,
+                    writtenFields,
                 )
             }
 
@@ -523,29 +523,101 @@ export class Annotator extends BaseAnnotator {
         return true
     }
 
-    protected writeRequires(
+    protected writeFieldAssignment(
+        field: AnalyzedField,
+        rosettaField: RosettaField | undefined,
+        out: string[],
+        baseName?: string | undefined,
+        writtenFields?: Set<string>,
+    ) {
+        if (writtenFields) {
+            if (writtenFields.has(field.name)) {
+                return
+            }
+
+            writtenFields.add(field.name)
+        }
+
+        if (rosettaField?.notes) {
+            if (baseName) {
+                out.push('\n')
+            }
+
+            writeNotes(rosettaField.notes, out)
+        }
+
+        let hasRosettaType = false
+        let typeString: string | undefined
+        if (rosettaField?.type || rosettaField?.nullable !== undefined) {
+            typeString = getRosettaTypeString(
+                rosettaField.type,
+                rosettaField.nullable,
+            )
+
+            hasRosettaType = true
+        } else if (field.expression) {
+            const prefix = getFunctionPrefixFromExpression(field.expression)
+
+            if (prefix) {
+                out.push('\n')
+                out.push(prefix)
+            }
+        } else {
+            typeString = getTypeString(field.types)
+        }
+
+        out.push('\n')
+        if (baseName) {
+            out.push(baseName)
+
+            if (!field.name.startsWith('[')) {
+                out.push('.')
+            }
+        }
+
+        let valueString: string
+        ;[valueString, typeString] = getValueString(
+            field.expression,
+            rosettaField,
+            typeString,
+            hasRosettaType,
+            false,
+        )
+
+        out.push(`${field.name} = ${valueString}`)
+
+        if (typeString) {
+            out.push(` ---@type ${typeString}`)
+        }
+    }
+
+    protected writeFields(
         mod: AnalyzedModule,
         out: string[],
         rosettaFile: RosettaFile | undefined,
     ): boolean {
-        if (mod.requires.length === 0) {
+        if (mod.fields.length === 0) {
             return false
         }
 
         let count = 0
-        for (const req of mod.requires) {
-            const rosettaClass = rosettaFile?.classes[req.name]
+        for (const field of mod.fields) {
+            const clsOrTable =
+                rosettaFile?.classes[field.name] ??
+                rosettaFile?.tables[field.name]
 
-            // skip global requires that have a rosetta class defined
-            if (rosettaClass) {
+            // classes & tables take precendence over fields
+            if (clsOrTable) {
                 continue
             }
 
-            if (out.length > 1) {
+            const rosettaField = rosettaFile?.fields[field.name]
+            if (out.length > 1 && !rosettaField?.notes) {
                 out.push('\n')
             }
 
-            out.push(`\n${req.name} = require("${req.module}")`)
+            this.writeFieldAssignment(field, rosettaField, out)
+
             count++
         }
 
@@ -627,67 +699,6 @@ export class Annotator extends BaseAnnotator {
         )
     }
 
-    protected writeStaticField(
-        name: string,
-        field: AnalyzedField,
-        rosettaField: RosettaField | undefined,
-        writtenFields: Set<string>,
-        out: string[],
-    ) {
-        if (writtenFields.has(field.name)) {
-            return
-        }
-
-        writtenFields.add(field.name)
-
-        if (rosettaField?.notes) {
-            out.push('\n')
-            writeNotes(rosettaField.notes, out)
-        }
-
-        let hasRosettaType = false
-        let typeString: string | undefined
-        if (rosettaField?.type || rosettaField?.nullable !== undefined) {
-            typeString = getRosettaTypeString(
-                rosettaField.type,
-                rosettaField.nullable,
-            )
-
-            hasRosettaType = true
-        } else if (field.expression) {
-            const prefix = getFunctionPrefixFromExpression(field.expression)
-
-            if (prefix) {
-                out.push('\n')
-                out.push(prefix)
-            }
-        } else {
-            typeString = getTypeString(field.types)
-        }
-
-        out.push('\n')
-        out.push(name)
-
-        if (!field.name.startsWith('[')) {
-            out.push('.')
-        }
-
-        let valueString: string
-        ;[valueString, typeString] = getValueString(
-            field.expression,
-            rosettaField,
-            typeString,
-            hasRosettaType,
-            false,
-        )
-
-        out.push(`${field.name} = ${valueString}`)
-
-        if (typeString) {
-            out.push(` ---@type ${typeString}`)
-        }
-    }
-
     protected writeTables(
         mod: AnalyzedModule,
         out: string[],
@@ -730,12 +741,12 @@ export class Annotator extends BaseAnnotator {
 
             const writtenFields = new Set<string>()
             for (const field of table.staticFields) {
-                this.writeStaticField(
-                    table.name,
+                this.writeFieldAssignment(
                     field,
                     rosettaTable?.staticFields?.[field.name],
-                    writtenFields,
                     out,
+                    table.name,
+                    writtenFields,
                 )
             }
 

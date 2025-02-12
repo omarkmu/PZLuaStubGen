@@ -246,18 +246,13 @@ export interface AnalyzedReturn {
     types: Set<string>
 }
 
-export interface AnalyzedRequire {
-    name: string
-    module: string
-}
-
 export interface AnalyzedModule {
     id: string
     prefix?: string
     functions: AnalyzedFunction[]
     classes: AnalyzedClass[]
     tables: AnalyzedTable[]
-    requires: AnalyzedRequire[]
+    fields: AnalyzedField[]
     returns: AnalyzedReturn[]
 }
 

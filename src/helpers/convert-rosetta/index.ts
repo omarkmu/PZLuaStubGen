@@ -1,5 +1,6 @@
 export { convertRosettaClass } from './convert-rosetta-class'
 export { convertRosettaConstructors } from './convert-rosetta-constructors'
+export { convertRosettaField } from './convert-rosetta-field'
 export { convertRosettaFields } from './convert-rosetta-fields'
 export { convertRosettaFile } from './convert-rosetta-file'
 export { convertRosettaFunction } from './convert-rosetta-function'

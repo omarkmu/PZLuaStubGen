@@ -4,6 +4,7 @@ import YAML from 'yaml'
 import {
     RosettaArgs,
     RosettaClass,
+    RosettaField,
     RosettaFile,
     RosettaFunction,
     RosettaTable,
@@ -136,6 +137,16 @@ export class Rosetta {
             }
         }
 
+        const fields: Record<string, RosettaField> = {}
+        if (expectField(data, 'languages.lua.fields', 'object')) {
+            for (const name of Object.keys(lua.fields)) {
+                const obj = lua.fields[name]
+                expect(obj, 'object', `field '${name}'`)
+
+                fields[name] = obj as RosettaField
+            }
+        }
+
         const functions: Record<string, RosettaFunction> = {}
         if (expectField(data, 'languages.lua.functions', 'array')) {
             for (let i = 0; i < lua.functions.length; i++) {
@@ -151,6 +162,7 @@ export class Rosetta {
             classes,
             tables,
             functions,
+            fields,
         }
 
         this.files[id] = file
