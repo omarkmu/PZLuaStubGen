@@ -99,6 +99,20 @@ export class BaseAnnotator extends Base {
             ),
         )
 
+        // in rosetta-only mode, assume static `Type` field on subclass is derive name
+        if (this.rosettaOnly && cls.extends) {
+            const typeField = cls.staticFields.find((x) => x.name === 'Type')
+            const typeValue =
+                typeField?.expression?.type === 'literal' &&
+                typeField.expression.literal
+                    ? readLuaStringLiteral(typeField.expression.literal)
+                    : undefined
+
+            if (typeValue) {
+                cls.deriveName = typeValue
+            }
+        }
+
         return cls
     }
 
