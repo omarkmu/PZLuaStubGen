@@ -766,7 +766,7 @@ export class Annotator extends BaseAnnotator {
                     `${identName}:${func.name}`,
                     false,
                     out,
-                    rosettaTable?.staticMethods?.[func.name],
+                    rosettaTable?.methods?.[func.name],
                 )
             }
         }
