@@ -8,9 +8,7 @@ import { Base } from './Base'
 import {
     convertRosettaClass,
     convertRosettaField,
-    convertRosettaFields,
     convertRosettaFunction,
-    convertRosettaFunctions,
     convertRosettaTable,
     readLuaStringLiteral,
 } from '../helpers'
@@ -56,6 +54,47 @@ export class BaseAnnotator extends Base {
         })
     }
 
+    protected applyExclusions(modules: AnalyzedModule[]) {
+        for (const mod of modules) {
+            const rosettaFile = this.rosetta.files[mod.id]
+            mod.classes = mod.classes.filter((x) => !this.exclude.has(x.name))
+
+            for (const cls of mod.classes) {
+                if (this.excludeFields.has(cls.name)) {
+                    cls.fields = []
+                    cls.literalFields = []
+                    cls.setterFields = []
+                    cls.staticFields = []
+                    continue
+                }
+
+                const rosettaClass = rosettaFile?.classes?.[cls.name]
+                const rosettaType = rosettaClass?.staticFields?.Type
+
+                let deriveName: string | undefined
+                if (cls.extends && rosettaType?.defaultValue) {
+                    // use rosetta field if defined & valid string literal
+                    deriveName = readLuaStringLiteral(rosettaType.defaultValue)
+                } else {
+                    // inject static `Type` field for derived classes
+                    deriveName = cls.deriveName
+                }
+
+                if (deriveName) {
+                    cls.staticFields.unshift({
+                        name: 'Type',
+                        types: new Set(),
+                        expression: {
+                            type: 'literal',
+                            luaType: 'string',
+                            literal: `"${deriveName}"`,
+                        },
+                    })
+                }
+            }
+        }
+    }
+
     protected augmentClass(
         cls: AnalyzedClass,
         rosettaFile: RosettaFile,
@@ -66,37 +105,39 @@ export class BaseAnnotator extends Base {
         }
 
         const fieldSet = new Set<string>(cls.fields.map((x) => x.name))
-        cls.fields.push(
-            ...convertRosettaFields(rosettaClass.fields ?? {}).filter(
-                (x) => !fieldSet.has(x.name),
-            ),
-        )
 
         const staticFieldSet = new Set<string>(
-            cls.staticFields.map((x) => x.name),
-        )
-        cls.setterFields.forEach((x) => staticFieldSet.add(x.name))
-
-        cls.staticFields.push(
-            ...convertRosettaFields(rosettaClass.staticFields ?? {}).filter(
-                (x) => !staticFieldSet.has(x.name),
-            ),
+            [...cls.staticFields, ...cls.setterFields].map((x) => x.name),
         )
 
-        const funcSet = new Set<string>(cls.functions.map((x) => x.name))
-        cls.functionConstructors.forEach((x) => funcSet.add(x.name))
-
-        cls.functions.push(
-            ...convertRosettaFunctions(rosettaClass.staticMethods ?? {}).filter(
-                (x) => !funcSet.has(x.name),
-            ),
+        const funcSet = new Set<string>(
+            [...cls.functions, ...cls.functionConstructors].map((x) => x.name),
         )
 
         const methodSet = new Set<string>(cls.methods.map((x) => x.name))
+
+        cls.fields.push(
+            ...Object.entries(rosettaClass.fields ?? {})
+                .filter(([name]) => !fieldSet.has(name))
+                .map(([name, x]) => convertRosettaField(x, name)),
+        )
+
+        cls.staticFields.push(
+            ...Object.entries(rosettaClass.staticFields ?? {})
+                .filter(([name]) => !staticFieldSet.has(name))
+                .map(([name, x]) => convertRosettaField(x, name)),
+        )
+
+        cls.functions.push(
+            ...Object.entries(rosettaClass.staticMethods ?? {})
+                .filter(([name]) => !funcSet.has(name))
+                .map(([, x]) => convertRosettaFunction(x)),
+        )
+
         cls.methods.push(
-            ...convertRosettaFunctions(rosettaClass.methods ?? {}, true).filter(
-                (x) => !methodSet.has(x.name),
-            ),
+            ...Object.entries(rosettaClass.methods ?? {})
+                .filter(([name]) => !methodSet.has(name))
+                .map(([, x]) => convertRosettaFunction(x, true)),
         )
 
         // in rosetta-only mode, assume static `Type` field on subclass is derive name
@@ -127,20 +168,21 @@ export class BaseAnnotator extends Base {
         }
 
         const clsSet = new Set<string>(mod.classes.map((x) => x.name))
+        const funcSet = new Set<string>(mod.functions.map((x) => x.name))
+        const tableSet = new Set<string>(mod.tables.map((x) => x.name))
+
         mod.classes.push(
             ...Object.values(rosettaFile.classes)
                 .filter((x) => !clsSet.has(x.name))
-                .map((x) => convertRosettaClass(x)),
+                .map(convertRosettaClass),
         )
 
-        const funcSet = new Set<string>(mod.functions.map((x) => x.name))
         mod.functions.push(
             ...Object.values(rosettaFile.functions)
                 .filter((x) => !funcSet.has(x.name))
                 .map((x) => convertRosettaFunction(x)),
         )
 
-        const tableSet = new Set<string>(mod.tables.map((x) => x.name))
         mod.tables.push(
             ...Object.values(rosettaFile.tables)
                 .filter((x) => !tableSet.has(x.name))
@@ -206,43 +248,7 @@ export class BaseAnnotator extends Base {
             }
         }
 
-        for (const mod of modules) {
-            const rosettaFile = this.rosetta.files[mod.id]
-            mod.classes = mod.classes.filter((x) => !this.exclude.has(x.name))
-
-            for (const cls of mod.classes) {
-                const rosettaClass = rosettaFile?.classes?.[cls.name]
-                if (this.excludeFields.has(cls.name)) {
-                    cls.fields = []
-                    cls.literalFields = []
-                    cls.setterFields = []
-                    cls.staticFields = []
-                    continue
-                }
-
-                let deriveName: string | undefined
-                const rosettaType = rosettaClass?.staticFields?.Type
-                if (cls.extends && rosettaType?.defaultValue) {
-                    // use rosetta field if defined & valid string literal
-                    deriveName = readLuaStringLiteral(rosettaType.defaultValue)
-                } else {
-                    // inject static `Type` field for derived classes
-                    deriveName = cls.deriveName
-                }
-
-                if (deriveName) {
-                    cls.staticFields.unshift({
-                        name: 'Type',
-                        types: new Set(),
-                        expression: {
-                            type: 'literal',
-                            luaType: 'string',
-                            literal: `"${deriveName}"`,
-                        },
-                    })
-                }
-            }
-        }
+        this.applyExclusions(modules)
 
         if (this.rosettaOnly || !this.noInject) {
             for (const mod of modules) {

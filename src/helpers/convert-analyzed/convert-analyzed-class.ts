@@ -1,5 +1,6 @@
 import { AnalyzedClass } from '../../analysis'
-import { WritableRosettaClass } from '../../rosetta'
+import { RosettaClass, WritableRosettaClass } from '../../rosetta'
+import { removeUndefinedOrEmpty } from '../remove-undefined-or-empty'
 import { convertAnalyzedConstructors } from './convert-analyzed-constructors'
 import { convertAnalyzedFields } from './convert-analyzed-fields'
 import { convertAnalyzedFunctions } from './convert-analyzed-functions'
@@ -7,56 +8,49 @@ import { convertAnalyzedOverloads } from './convert-analyzed-overloads'
 
 export const convertAnalyzedClass = (
     cls: AnalyzedClass,
+    mergeCls?: RosettaClass,
 ): WritableRosettaClass => {
     const rosettaCls: WritableRosettaClass = { name: cls.name }
 
-    if (cls.extends) {
-        rosettaCls.extends = cls.extends
-    }
+    rosettaCls.extends = cls.extends ?? mergeCls?.extends
+    rosettaCls.deprecated = mergeCls?.deprecated
+    rosettaCls.mutable = mergeCls?.mutable
 
     if (cls.local) {
         rosettaCls.local = true
     }
 
-    if (cls.constructors.length > 0) {
-        rosettaCls.constructors = convertAnalyzedConstructors(cls.constructors)
-    }
+    rosettaCls.notes = mergeCls?.notes
+    rosettaCls.tags = mergeCls?.tags
 
-    if (cls.staticFields.length > 0) {
-        rosettaCls.staticFields = convertAnalyzedFields(cls.staticFields)
-    }
+    rosettaCls.constructors = convertAnalyzedConstructors(
+        cls.constructors,
+        mergeCls?.constructors,
+    )
 
-    if (cls.setterFields.length > 0) {
-        rosettaCls.staticFields ??= {}
-        const fields = convertAnalyzedFields(cls.setterFields)
+    rosettaCls.staticFields = convertAnalyzedFields(
+        [...cls.staticFields, ...cls.setterFields],
+        mergeCls?.staticFields,
+    )
 
-        for (const [name, field] of Object.entries(fields)) {
-            rosettaCls.staticFields[name] = field
-        }
-    }
+    rosettaCls.fields = convertAnalyzedFields(cls.fields, mergeCls?.fields)
 
-    if (cls.fields.length > 0) {
-        rosettaCls.fields = convertAnalyzedFields(cls.fields)
-    }
+    rosettaCls.overloads = convertAnalyzedOverloads(
+        cls.overloads,
+        mergeCls?.overloads,
+    )
 
-    if (cls.overloads.length > 0) {
-        rosettaCls.overloads = convertAnalyzedOverloads(cls.overloads)
-    }
+    rosettaCls.operators = mergeCls?.operators
 
-    if (cls.methods.length > 0) {
-        rosettaCls.methods = convertAnalyzedFunctions(cls.methods)
-    }
+    rosettaCls.methods = convertAnalyzedFunctions(
+        cls.methods,
+        mergeCls?.methods,
+    )
 
-    if (cls.functions.length > 0) {
-        rosettaCls.staticMethods = convertAnalyzedFunctions(cls.functions)
-    }
+    rosettaCls.staticMethods = convertAnalyzedFunctions(
+        [...cls.functions, ...cls.functionConstructors],
+        mergeCls?.staticMethods,
+    )
 
-    if (cls.functionConstructors.length > 0) {
-        rosettaCls.staticMethods ??= []
-        rosettaCls.staticMethods.push(
-            ...convertAnalyzedFunctions(cls.functionConstructors),
-        )
-    }
-
-    return rosettaCls
+    return removeUndefinedOrEmpty(rosettaCls)
 }

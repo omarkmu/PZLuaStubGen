@@ -1,22 +1,20 @@
 import { RosettaParameter } from '../../rosetta'
 import { AnalyzedParameter } from '../../analysis'
-import { convertAnalyzedTypes } from './convert-analyzed-types'
+import { convertAnalyzedParameter } from './convert-analyzed-parameter'
 
 export const convertAnalyzedParameters = (
     params: AnalyzedParameter[],
+    mergeParams?: RosettaParameter[],
 ): RosettaParameter[] => {
-    return params.map((x): RosettaParameter => {
-        const param: RosettaParameter = { name: x.name }
-        const [types, nullable] = convertAnalyzedTypes(x.types)
+    const converted = params.map((x, i) =>
+        convertAnalyzedParameter(x, mergeParams?.[i]),
+    )
 
-        if (types) {
-            param.type = types
+    if (mergeParams && params.length < mergeParams.length) {
+        for (let i = params.length; i < mergeParams.length; i++) {
+            converted.push(mergeParams[i])
         }
+    }
 
-        if (nullable) {
-            param.optional = true
-        }
-
-        return param
-    })
+    return converted
 }

@@ -8,6 +8,8 @@ import { AnnotateArgs, Annotator } from './annotation'
 import {
     RosettaGenerateArgs as GenerateArgs,
     RosettaGenerator as Generator,
+    RosettaUpdater as Updater,
+    RosettaUpdateArgs as UpdateArgs,
 } from './rosetta'
 
 /**
@@ -102,6 +104,23 @@ const addHeuristicOption = (yargs: yargs.Argv) => {
         })
 }
 
+const addRosettaOptions = (yargs: yargs.Argv) => {
+    return yargs
+        .option('output-directory', {
+            type: 'string',
+            alias: 'o',
+            required: true,
+            desc: 'The directory for output files',
+        })
+        .option('format', {
+            type: 'string',
+            alias: 'f',
+            default: 'yml',
+            choices: ['json', 'yml'],
+            desc: 'The format to use for generated files',
+        })
+}
+
 const addOutputFileOption = (yargs: yargs.Argv) => {
     return yargs.option('output-file', {
         type: 'string',
@@ -181,22 +200,38 @@ const annotateCommand = (yargs: yargs.Argv) => {
  */
 const initRosettaCommand = (yargs: yargs.Argv) => {
     addSharedPrefix(yargs)
-        .option('output-directory', {
-            type: 'string',
-            alias: 'o',
-            required: true,
-            desc: 'The directory for output files',
-        })
-        .option('format', {
-            type: 'string',
-            alias: 'f',
-            default: 'yml',
-            choices: ['json', 'yml'],
-            desc: 'The format to use for generated files',
-        })
 
+    addRosettaOptions(yargs)
     addHeuristicOption(yargs)
     addExcludeOptions(yargs)
+
+    return addSharedSuffix(yargs)
+}
+
+/**
+ * Adds the CLI options for the rosetta update command.
+ */
+const updateRosettaCommand = (yargs: yargs.Argv) => {
+    addSharedPrefix(yargs)
+
+    addRosettaOptions(yargs)
+    addHeuristicOption(yargs)
+
+    yargs
+        .option('delete-unknown', {
+            type: 'boolean',
+            default: true,
+            hidden: true,
+            desc: 'Whether unrecognized files and items should be removed',
+        })
+        .option('no-delete-unknown', {
+            type: 'boolean',
+            defaultDescription: 'false',
+            desc: 'Display warnings for unknown items instead of deleting them',
+        })
+
+    addExcludeOptions(yargs)
+
     return addSharedSuffix(yargs)
 }
 
@@ -234,6 +269,12 @@ yargs(hideBin(process.argv))
         'Generates default Rosetta data files',
         initRosettaCommand,
         (async (args: GenerateArgs) => await new Generator(args).run()) as any,
+    )
+    .command(
+        'update-rosetta',
+        'Updates Rosetta data files',
+        updateRosettaCommand,
+        (async (args: UpdateArgs) => await new Updater(args).run()) as any,
     )
     .command(
         'report-analysis',

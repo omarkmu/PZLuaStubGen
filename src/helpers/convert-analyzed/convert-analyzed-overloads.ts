@@ -5,7 +5,12 @@ import { convertAnalyzedReturns } from './convert-analyzed-returns'
 
 export const convertAnalyzedOverloads = (
     overloads: AnalyzedFunction[],
+    mergeOverloads?: RosettaOverload[],
 ): RosettaOverload[] => {
+    if (mergeOverloads) {
+        return mergeOverloads
+    }
+
     return overloads.map((x) => {
         const overload: RosettaOverload = {}
 

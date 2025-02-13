@@ -1,33 +1,47 @@
 import { AnalyzedTable } from '../../analysis'
-import { WritableRosettaTable } from '../../rosetta'
+import { RosettaTable, WritableRosettaTable } from '../../rosetta'
+import { removeUndefinedOrEmpty } from '../remove-undefined-or-empty'
 import { convertAnalyzedFields } from './convert-analyzed-fields'
 import { convertAnalyzedFunctions } from './convert-analyzed-functions'
 import { convertAnalyzedOverloads } from './convert-analyzed-overloads'
 
 export const convertAnalyzedTable = (
     table: AnalyzedTable,
+    mergeTable?: RosettaTable,
 ): WritableRosettaTable => {
     const rosettaTable: WritableRosettaTable = { name: table.name }
+
+    rosettaTable.deprecated = mergeTable?.deprecated
+    rosettaTable.mutable = mergeTable?.mutable
 
     if (table.local) {
         rosettaTable.local = true
     }
 
-    if (table.staticFields.length > 0) {
-        rosettaTable.staticFields = convertAnalyzedFields(table.staticFields)
-    }
+    rosettaTable.notes = mergeTable?.notes
+    rosettaTable.tags = mergeTable?.tags
 
-    if (table.overloads.length > 0) {
-        rosettaTable.overloads = convertAnalyzedOverloads(table.overloads)
-    }
+    rosettaTable.staticFields = convertAnalyzedFields(
+        table.staticFields,
+        mergeTable?.staticFields,
+    )
 
-    if (table.methods.length > 0) {
-        rosettaTable.methods = convertAnalyzedFunctions(table.methods)
-    }
+    rosettaTable.overloads = convertAnalyzedOverloads(
+        table.overloads,
+        mergeTable?.overloads,
+    )
 
-    if (table.functions.length > 0) {
-        rosettaTable.staticMethods = convertAnalyzedFunctions(table.functions)
-    }
+    rosettaTable.operators = mergeTable?.operators
 
-    return rosettaTable
+    rosettaTable.methods = convertAnalyzedFunctions(
+        table.methods,
+        mergeTable?.methods,
+    )
+
+    rosettaTable.staticMethods = convertAnalyzedFunctions(
+        table.functions,
+        mergeTable?.staticMethods,
+    )
+
+    return removeUndefinedOrEmpty(rosettaTable)
 }

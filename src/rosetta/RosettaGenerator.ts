@@ -26,16 +26,26 @@ export class RosettaGenerator extends BaseAnnotator {
     }
 
     generateRosetta(mod: AnalyzedModule): string {
+        const rosettaFile = this.rosetta.files[mod.id]
+
         const classes: Record<string, any> = {}
         for (const cls of mod.classes) {
-            const converted: any = convertAnalyzedClass(cls)
+            const converted: any = convertAnalyzedClass(
+                cls,
+                rosettaFile?.classes[cls.name],
+            )
+
             delete converted.name
             classes[cls.name] = converted
         }
 
         const tables: Record<string, any> = {}
         for (const table of mod.tables) {
-            const converted: any = convertAnalyzedTable(table)
+            const converted: any = convertAnalyzedTable(
+                table,
+                rosettaFile?.tables[table.name],
+            )
+
             delete converted.name
             tables[table.name] = converted
         }
@@ -50,11 +60,17 @@ export class RosettaGenerator extends BaseAnnotator {
         }
 
         if (mod.functions.length > 0) {
-            luaData.functions = convertAnalyzedFunctions(mod.functions)
+            luaData.functions = convertAnalyzedFunctions(
+                mod.functions,
+                rosettaFile?.functions,
+            )
         }
 
         if (mod.fields.length > 0) {
-            luaData.fields = convertAnalyzedFields(mod.fields)
+            luaData.fields = convertAnalyzedFields(
+                mod.fields,
+                rosettaFile?.fields,
+            )
         }
 
         const data: any = {}
@@ -80,11 +96,22 @@ export class RosettaGenerator extends BaseAnnotator {
 
     async run() {
         const modules = await this.getModules(true)
+        await this.writeModules(modules)
 
-        const outDir = this.outDirectory
-        const suffix = this.rosettaFormat === 'json' ? '.json' : '.yml'
+        const resolvedOutDir = path.resolve(this.outDirectory)
+        log.info(`Generated Rosetta data at '${resolvedOutDir}'`)
 
-        await time('Rosetta initialization', async () => {
+        return modules
+    }
+
+    protected async writeModules(
+        modules: AnalyzedModule[],
+        taskName = 'Rosetta initialization',
+    ) {
+        await time(taskName, async () => {
+            const outDir = this.outDirectory
+            const suffix = this.rosettaFormat === 'json' ? '.json' : '.yml'
+
             for (const mod of modules) {
                 const outFile = path.resolve(
                     path.join(outDir, this.rosettaFormat, mod.id + suffix),
@@ -108,10 +135,5 @@ export class RosettaGenerator extends BaseAnnotator {
                 }
             }
         })
-
-        const resolvedOutDir = path.resolve(outDir)
-        log.info(`Generated Rosetta data at '${resolvedOutDir}'`)
-
-        return modules
     }
 }

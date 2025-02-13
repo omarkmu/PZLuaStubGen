@@ -24,7 +24,7 @@ type DataReader = (text: string) => any
 export class Rosetta {
     readonly files: Record<string, RosettaFile>
 
-    readonly inputDirectory: string
+    protected inputDirectory: string
     protected loaded: boolean = false
 
     constructor(args: RosettaArgs) {
@@ -35,18 +35,16 @@ export class Rosetta {
 
     async load(dir?: string): Promise<boolean> {
         const targetDir = dir ?? this.inputDirectory
-        log.verbose(`Loading Rosetta from '${targetDir}'`)
-
         return time(
             'loading Rosetta',
             async () => {
                 if (await this.loadJSON(dir)) {
-                    log.verbose('Loaded Rosetta from JSON definitions')
+                    log.verbose(`Using JSON Rosetta data from '${targetDir}'`)
                     return true
                 }
 
                 if (await this.loadYAML(dir)) {
-                    log.verbose('Loaded Rosetta from YAML definitions')
+                    log.verbose(`Using YAML Rosetta data from '${targetDir}'`)
                     return true
                 }
 
@@ -92,7 +90,7 @@ export class Rosetta {
         )
     }
 
-    readData(id: string, data: any): RosettaFile | undefined {
+    readData(data: any, id: string, filename: string): RosettaFile | undefined {
         expect(data, 'object')
 
         expectField(data, 'version', 'string', false)
@@ -143,7 +141,7 @@ export class Rosetta {
                 const obj = lua.fields[name]
                 expect(obj, 'object', `field '${name}'`)
 
-                fields[name] = obj as RosettaField
+                fields[name] = obj
             }
         }
 
@@ -159,6 +157,7 @@ export class Rosetta {
 
         const file: RosettaFile = {
             id,
+            filename,
             classes,
             tables,
             functions,
@@ -170,18 +169,18 @@ export class Rosetta {
     }
 
     protected async loadFile(
-        path: string,
+        filePath: string,
         basePath: string,
         reader: DataReader,
         extensions: string[],
     ): Promise<RosettaFile | undefined> {
         try {
-            const content = await readFileContents(path)
+            const content = await readFileContents(filePath)
             const data = reader(content)
-            const id = getFileIdentifier(path, basePath, extensions)
-            return this.readData(id, data)
+            const id = getFileIdentifier(filePath, basePath, extensions)
+            return this.readData(data, id, path.resolve(filePath))
         } catch (e) {
-            log.error(`Failed to read Rosetta file '${path}': ${e}`)
+            log.error(`Failed to read Rosetta file '${filePath}': ${e}`)
         }
     }
 

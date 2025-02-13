@@ -1,22 +1,25 @@
 import { AnalyzedFunction } from '../../analysis'
 import { RosettaFunction } from '../../rosetta'
-import { convertAnalyzedParameters } from './convert-analyzed-parameters'
-import { convertAnalyzedReturns } from './convert-analyzed-returns'
+import { convertAnalyzedFunction } from './convert-analyzed-function'
 
 export const convertAnalyzedFunctions = (
     functions: AnalyzedFunction[],
+    mergeFunctions?: Record<string, RosettaFunction>,
 ): RosettaFunction[] => {
-    return functions.map((x): RosettaFunction => {
-        const func: RosettaFunction = { name: x.name }
+    const converted = functions.map((x) =>
+        convertAnalyzedFunction(x, mergeFunctions?.[x.name]),
+    )
 
-        if (x.parameters.length > 0) {
-            func.parameters = convertAnalyzedParameters(x.parameters)
+    if (!mergeFunctions) {
+        return converted
+    }
+
+    const seen = new Set(converted.map((x) => x.name))
+    for (const [name, func] of Object.entries(mergeFunctions)) {
+        if (!seen.has(name)) {
+            converted.push(func)
         }
+    }
 
-        if (x.returnTypes.length > 0) {
-            func.return = convertAnalyzedReturns(x.returnTypes)
-        }
-
-        return func
-    })
+    return converted
 }

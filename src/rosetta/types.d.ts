@@ -6,6 +6,7 @@ export interface RosettaArgs {
 
 export interface RosettaFile {
     id: string
+    filename: string
 
     classes: Record<string, RosettaClass>
     tables: Record<string, RosettaTable>
@@ -113,8 +114,11 @@ export interface RosettaReturn {
 }
 
 export interface RosettaGenerateArgs extends BaseAnnotateArgs {
-    /**
-     * The format to use for generating Rosetta stubs.
-     */
     format?: 'json' | 'yml'
+}
+
+export interface RosettaUpdateArgs extends RosettaGenerateArgs {
+    outputDirectory: string
+    rosetta?: string
+    deleteUnknown?: boolean
 }
