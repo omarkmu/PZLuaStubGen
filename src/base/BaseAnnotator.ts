@@ -54,6 +54,41 @@ export class BaseAnnotator extends Base {
         })
     }
 
+    protected addTypeField(modules: AnalyzedModule[]) {
+        for (const mod of modules) {
+            const rosettaFile = this.rosetta.files[mod.id]
+            if (!rosettaFile) {
+                continue
+            }
+
+            for (const cls of mod.classes) {
+                const rosettaClass = rosettaFile.classes?.[cls.name]
+                const rosettaType = rosettaClass?.staticFields?.Type
+
+                let deriveName: string | undefined
+                if (cls.deriveName) {
+                    // inject static `Type` field for derived classes
+                    deriveName = cls.deriveName
+                } else if (cls.extends && rosettaType?.defaultValue) {
+                    // use rosetta field if defined & valid string literal
+                    deriveName = readLuaStringLiteral(rosettaType.defaultValue)
+                }
+
+                if (deriveName) {
+                    cls.staticFields.unshift({
+                        name: 'Type',
+                        types: new Set(),
+                        expression: {
+                            type: 'literal',
+                            luaType: 'string',
+                            literal: `"${deriveName}"`,
+                        },
+                    })
+                }
+            }
+        }
+    }
+
     protected applyExclusions(modules: AnalyzedModule[]) {
         for (const mod of modules) {
             const rosettaFile = this.rosetta.files[mod.id]
@@ -241,6 +276,8 @@ export class BaseAnnotator extends Base {
     }
 
     protected async transformModules(modules: AnalyzedModule[]) {
+        this.applyExclusions(modules)
+
         const idSet = new Set<string>(modules.map((x) => x.id))
         for (const [id, file] of Object.entries(this.rosetta.files)) {
             if (!idSet.has(id)) {
@@ -248,7 +285,7 @@ export class BaseAnnotator extends Base {
             }
         }
 
-        this.applyExclusions(modules)
+        this.addTypeField(modules)
 
         if (this.rosettaOnly || !this.noInject) {
             for (const mod of modules) {
