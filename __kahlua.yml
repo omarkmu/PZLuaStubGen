@@ -64,11 +64,14 @@ languages:
                   - type: table
     classes:
       Reader:
+        mutable: false
         tags: [NoInitializer]
       InputStream:
+        mutable: false
         tags: [NoInitializer]
       Random:
         local: true
+        mutable: false
         methods:
           - name: random
             parameters:

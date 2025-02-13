@@ -260,7 +260,8 @@ export class Annotator extends BaseAnnotator {
                 out.push(`\n---@field ${field.name} ${typeString}${notes}`)
             }
 
-            if (rosettaClass?.mutable || !this.strictFields) {
+            const mutable = rosettaClass?.mutable
+            if (mutable || (!this.strictFields && mutable !== false)) {
                 out.push('\n---@field [any] any')
             }
 
